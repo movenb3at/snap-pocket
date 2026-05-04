@@ -1,7 +1,7 @@
 {
     "checkpoints": {
         "anime": {
-            "model_name": "flat2DAnimerge_v45Sharp.safetensors",
+            "model_name": "put_your_model_here",
             "steps": 50,
             "cfg_scale": 8,
             "denoising_strength": 0.42,
@@ -36,7 +36,7 @@
         },
 
         "watercolor": {
-            "model_name": "vividWatercolors_10.safetensors",
+            "model_name": "put_your_model_here",
             "steps": 50,
             "denoising_strength": 0.42,
             "cfg_scale": 8,
@@ -71,7 +71,7 @@
         },
 
         "comic": {
-            "model_name": "Sketch_offcolor.safetensors",
+            "model_name": "put_your_model_here",
             "steps": 50,
             "cfg_scale": 6,
             "denoising_strength": 0.41,
