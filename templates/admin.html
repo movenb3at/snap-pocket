@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 페이지</title>
+
+    <style>
+        /* ============================================
+           Global Reset & Base Styles
+        ============================================= */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary: #00d4ff;
+            --primary-glow: rgba(0, 212, 255, 0.3);
+            --secondary: #7c3aed;
+            --secondary-glow: rgba(124, 58, 237, 0.2);
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.1);
+            --card-bg: rgba(255, 255, 255, 0.04);
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a0f 0%, #12121a 50%, #0f0f1a 100%);
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: #fff;
+            padding: 32px;
+            position: relative;
+        }
+
+        /* Subtle background pattern */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: 
+                radial-gradient(circle at 20% 20%, var(--primary-glow) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, var(--secondary-glow) 0%, transparent 50%);
+            pointer-events: none;
+            animation: backgroundShift 20s ease-in-out infinite;
+        }
+
+        @keyframes backgroundShift {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 0.8; }
+        }
+
+        /* ============================================
+           Header
+        ============================================= */
+        .admin-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 40px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--glass-border);
+            animation: slideDown 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .admin-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            box-shadow: 0 8px 24px var(--primary-glow);
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff, rgba(255,255,255,0.7));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+            padding: 10px 18px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 50px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: livePulse 2s ease-in-out infinite;
+        }
+
+        @keyframes livePulse {
+            0%, 100% { 
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+            }
+            50% { 
+                opacity: 0.7;
+                box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+            }
+        }
+
+        /* ============================================
+           Content Grid
+        ============================================= */
+        #content {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+            gap: 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        @media (max-width: 560px) {
+            #content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ============================================
+           Item Card
+        ============================================= */
+        .item {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 24px;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: cardAppear 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+        }
+
+        @keyframes cardAppear {
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .item:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary);
+            box-shadow: 
+                0 20px 40px rgba(0, 0, 0, 0.3),
+                0 0 0 1px var(--primary-glow);
+        }
+
+        /* Item Header */
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .folder-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .folder-name::before {
+            content: '📁';
+            font-size: 14px;
+        }
+
+        .time-stamp {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .time-stamp::before {
+            content: '🕐';
+            font-size: 12px;
+        }
+
+        .item-badge {
+            padding: 6px 14px;
+            background: linear-gradient(135deg, var(--primary-glow), transparent);
+            border: 1px solid var(--primary);
+            border-radius: 50px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Image Row */
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .img-box {
+            position: relative;
+            border-radius: 14px;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease;
+        }
+
+        .img-box:hover {
+            transform: scale(1.02);
+        }
+
+        .img-box::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 14px;
+            padding: 1px;
+            background: linear-gradient(135deg, var(--glass-highlight), transparent);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        .img-title {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            padding: 6px 12px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+            z-index: 2;
+            border: 1px solid var(--glass-border);
+        }
+
+        .img-box img {
+            width: 100%;
+            height: auto;
+            display: block;
+            transition: transform 0.5s ease;
+        }
+
+        .img-box:hover img {
+            transform: scale(1.05);
+        }
+
+        /* ============================================
+           Empty State
+        ============================================= */
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 80px 40px;
+            background: var(--glass-bg);
+            border: 1px dashed var(--glass-border);
+            border-radius: 20px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-text {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <header class="admin-header">
+        <div class="admin-icon">📂</div>
+        <h1>관리자 페이지</h1>
+        <div class="live-indicator">
+            <span class="live-dot"></span>
+            <span>실시간 업데이트</span>
+        </div>
+    </header>
+
+    <div id="content"></div>
+
+    <script>
+        let oldItems = [];
+
+        function createItemHTML(item) {
+            return `
+                <div class="item" id="item-${item.folder}">
+                    <div class="item-header">
+                        <div class="item-info">
+                            <div class="folder-name">${item.folder}</div>
+                            <div class="time-stamp">${item.time}</div>
+                        </div>
+                        <div class="item-badge">처리됨</div>
+                    </div>
+
+                    <div class="row">
+                        <div class="img-box">
+                            <div class="img-title">RAW 이미지</div>
+                            <img src="/public/${item.folder}/raw.png?cache=${item.timestamp}" alt="RAW">
+                        </div>
+                        <div class="img-box">
+                            <div class="img-title">결과 이미지</div>
+                            <img src="/public/${item.folder}/result.png?cache=${item.timestamp}" alt="Result">
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateDOM(newItems) {
+            const container = document.getElementById("content");
+
+            // Show empty state if no items
+            if (newItems.length === 0 && oldItems.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📭</div>
+                        <div class="empty-text">아직 처리된 이미지가 없습니다</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Remove empty state if items exist
+            const emptyState = container.querySelector('.empty-state');
+            if (emptyState && newItems.length > 0) {
+                emptyState.remove();
+            }
+
+            // 1) 기존 목록과 다르면 새로 추가
+            newItems.forEach((item, index) => {
+                const id = `item-${item.folder}`;
+                let el = document.getElementById(id);
+
+                if (!el) {
+                    // 새 요소 → 맨 위에 prepend (최신순)
+                    const div = document.createElement("div");
+                    div.innerHTML = createItemHTML(item);
+                    const newEl = div.firstElementChild;
+                    newEl.style.animationDelay = `${index * 0.1}s`;
+                    container.prepend(newEl);
+                }
+            });
+
+            // 2) 기존 목록 중에서 삭제된 항목 제거
+            oldItems.forEach(item => {
+                if (!newItems.find(n => n.folder === item.folder)) {
+                    const el = document.getElementById(`item-${item.folder}`);
+                    if (el) {
+                        el.style.animation = 'cardDisappear 0.3s ease forwards';
+                        setTimeout(() => el.remove(), 300);
+                    }
+                }
+            });
+
+            oldItems = newItems;
+        }
+
+        // Add disappear animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes cardDisappear {
+                to {
+                    opacity: 0;
+                    transform: translateY(-20px) scale(0.95);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        async function loadData() {
+            const res = await fetch("/admin_data");
+            const items = await res.json();
+            updateDOM(items);
+        }
+
+        loadData();
+        setInterval(loadData, 3000);
+    </script>
+
+</body>
+</html>
