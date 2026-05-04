@@ -128,13 +128,13 @@ http://127.0.0.1:5000/main_page
 ### 터널 생성
 
 ```
-cloudflared tunnel --url http://localhost:5000
+run.bat 실행
 ```
 
 성공 시:
 
 ```
-project/tunnel_url.txt → https://random-xxxx-xxxx.trycloudflare.com 저장
+tunnel_url.txt → https://random-xxxx-xxxx.trycloudflare.com 저장
 ```
 
 ---
