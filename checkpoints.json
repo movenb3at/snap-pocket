@@ -1,0 +1,153 @@
+{
+    "checkpoints": {
+        "anime": {
+            "model_name": "flat2DAnimerge_v45Sharp.safetensors",
+            "steps": 50,
+            "cfg_scale": 8,
+            "denoising_strength": 0.42,
+            "prompt": "anime artwork. anime style, key visual, vibrant, studio anime, highly detailed",
+            "negative_prompt": "photo, deformed, black and white, realism, disfigured, low contrast",
+            
+            "male_prompt": "handsome boy",
+            "female_prompt": "beautiful woman",
+            "mixed_prompt": "multiple people, group, anime character concepts",
+            
+            "male_negative_prompt": "female, girl, woman, heavy makeup",
+            "female_negative_prompt": "male, boy, masculine, facial hair",
+            "mixed_negative_prompt": "heavy makeup, lipstick, facial hair, deformed, bad anatomy",
+
+            "controlnet_model": "diffusion_pytorch_model [a3cd7cd6]",
+            "controlnet_weight": 1.0,
+            "guidance_end": 1.0,
+            
+            "ad_model": "mediapipe_face_full",
+            "ad_prompt": "anime artwork. anime style, key visual, vibrant, studio anime, highly detailed, studio anime",
+            "ad_negative_prompt": "realism, disfigured, poorly drawn face, mutated, asymmetrical eyes",
+            
+            "male_ad_prompt": "handsome anime boy face, sharp eyes",
+            "female_ad_prompt": "beautiful anime girl face, beautiful eyes",
+            "mixed_ad_prompt": "highly detailed anime face, clear eyes, natural expression",
+            
+            "male_ad_negative_prompt": "lipstick, feminine, makeup, overly cute",
+            "female_ad_negative_prompt": "masculine, rough skin",
+            "mixed_ad_negative_prompt": "heavy makeup, lipstick, extreme masculine, mutated",
+
+            "ad_denoising_strength": 0.2
+        },
+
+        "watercolor": {
+            "model_name": "vividWatercolors_10.safetensors",
+            "steps": 50,
+            "denoising_strength": 0.42,
+            "cfg_scale": 8,
+            "prompt": "wtrcolor style. watercolor painting, vibrant, painterly, detailed, textural, artistic",
+            "negative_prompt": "anime, photorealistic, 35mm film, deformed, glitch, low contrast, noisy",
+            
+            "male_prompt": "handsome, natural skin texture, young adult",
+            "female_prompt": "beautiful woman, feminine, natural skin texture, young adult",
+            "mixed_prompt": "multiple people, group of people, natural skin texture",
+            
+            "male_negative_prompt": "female, girl, woman, lipstick, heavy makeup, feminine",
+            "female_negative_prompt": "male, boy, masculine, facial hair",
+            "mixed_negative_prompt": "heavy makeup, lipstick, facial hair, highly masculine, overly feminine",
+
+            "controlnet_model": "diffusion_pytorch_model [a3cd7cd6]",
+            "controlnet_weight": 0.6,
+            "guidance_end": 1.0,
+            
+            "ad_model": "face_yolov8m.pt",
+            "ad_prompt": "watercolor painting. vibrant, painterly, detailed, textural, artistic, detailed face",
+            "ad_negative_prompt": "deformed, poorly drawn face, asymmetrical eyes",
+            
+            "male_ad_prompt": "detailed handsome face, natural features",
+            "female_ad_prompt": "beautiful woman face",
+            "mixed_ad_prompt": "detailed natural face, clear features, clean skin",
+            
+            "male_ad_negative_prompt": "lipstick, feminine, makeup, blush",
+            "female_ad_negative_prompt": "masculine, rough skin",
+            "mixed_ad_negative_prompt": "lipstick, heavy makeup, facial hair, deformed face",
+            
+            "ad_denoising_strength": 0.5
+        },
+
+        "comic": {
+            "model_name": "Sketch_offcolor.safetensors",
+            "steps": 50,
+            "cfg_scale": 6,
+            "denoising_strength": 0.41,
+            "prompt": "comic. graphic illustration, comic art, graphic novel art, vibrant, highly detailed",
+            "negative_prompt": "photograph, deformed, glitch, noisy, realistic, stock photo",
+            
+            "male_prompt": "handsomeboy, masculine",
+            "female_prompt": "beautiful woman, feminine",
+            "mixed_prompt": "multiple people, comic book characters, group",
+            
+            "male_negative_prompt": "female, girl, woman, lipstick, heavy makeup, feminine",
+            "female_negative_prompt": "male, boy,boy, masculine, facial hair",
+            "mixed_negative_prompt": "lipstick, heavy makeup, facial hair",
+
+            "controlnet_model": "diffusion_pytorch_model [a3cd7cd6]",
+            "controlnet_weight": 0.6,
+            "guidance_end": 1.0,
+            
+            "ad_model": "mediapipe_face_full",
+            "ad_prompt": "comic. graphic illustration, comic art, graphic novel art, vibrant, highly detaileddetailed comic art face, clear ink lines, vivid colors",
+            "ad_negative_prompt": "realistic, photograph, deformed face, distorted",
+            
+            "male_ad_prompt": "detailed comic handsome man face, strong jawline",
+            "female_ad_prompt": "detailed comic beautiful woman face",
+            "mixed_ad_prompt": "detailed comic art face, clear ink lines, distinct features",
+            
+            "male_ad_negative_prompt": "lipstick, feminine, makeup",
+            "female_ad_negative_prompt": "masculine, facial hair",
+            "mixed_ad_negative_prompt": "lipstick, heavy makeup, rough beard",
+
+            "ad_denoising_strength": 0.2
+        },
+        "none": {
+            "model_name": null,
+            "steps": 50,
+            "cfg_scale": 7,
+            "denoising_strength": 0.75,
+            "prompt": "",
+            "negative_prompt": "",
+            "controlnet_model": "",
+            "controlnet_module": "",
+            "controlnet_weight": 0,
+            "ad_model": "",
+            "ad_prompt": "",
+            "ad_negative_prompt": "",
+            "ad_denoising_strength": 0
+        },
+        "distortion_lens_filter": {
+            "model_name": null,
+            "steps": 50,
+            "cfg_scale": 7,
+            "denoising_strength": 0.75,
+            "prompt": "",
+            "negative_prompt": "",
+            "controlnet_model": "",
+            "controlnet_module": "",
+            "controlnet_weight": 0,
+            "ad_model": "",
+            "ad_prompt": "",
+            "ad_negative_prompt": "",
+            "ad_denoising_strength": 0
+        },
+        "face_filter": {
+            "model_name": null,
+            "steps": 50,
+            "cfg_scale": 7,
+            "denoising_strength": 0.75,
+            "prompt": "",
+            "negative_prompt": "",
+            "controlnet_model": "",
+            "controlnet_module": "",
+            "controlnet_weight": 0,
+            "ad_model": "",
+            "ad_prompt": "",
+            "ad_negative_prompt": "",
+            "ad_denoising_strength": 0
+        }
+    }
+}
