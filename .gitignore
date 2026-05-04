@@ -24,7 +24,3 @@ build/
 public/**/*.png
 static/**/*.png
 temp/**/*.png
-
-# 기타 파일
-checkpoints.json
-tunnel_url.txt
