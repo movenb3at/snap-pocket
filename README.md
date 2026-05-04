@@ -61,16 +61,16 @@ SnapPocket은 카메라 촬영 → AI 스타일 변환 → QR 다운로드를 **
 ## Project Structure
 
 ```
-project/
+main/
    ├─ app.py              # Flask backend server
    ├─ checkpoints.json    # Style configuration
    ├─ templates/
    │   ├─ index.html      # Main UI
    │   ├─ download.html   # Download page UI
-   │   ├─ admin.html      # Admin UI
+   │   └─ admin.html      # Admin UI
    ├─ static/
    │   ├─ preview/        # Temporary AI result images
-   │   ├─ qr/             # Generated QR codes
+   │   └─ qr/             # Generated QR codes
    ├─ public/                # Final user-accessible images
    ├─ temp/                  # Raw image storage
    ├─ run.bat                # Automated Start Process

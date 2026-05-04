@@ -24,3 +24,6 @@ build/
 public/**/*.png
 static/**/*.png
 temp/**/*.png
+
+# 커스텀 체크포인트 json 파일
+checkpoints.json
