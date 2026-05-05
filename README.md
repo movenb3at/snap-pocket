@@ -112,7 +112,7 @@ pip install -r requirements.txt
 ### 3. 서버 실행
 
 ```
-python app.py
+run.bat 실행
 ```
 
 웹 접속:
@@ -123,7 +123,7 @@ http://127.0.0.1:5000/main_page
 
 ---
 
-## Optional: Public Access (Cloudflared)
+## 4. Public Access (via Cloudflared)
 
 ### 터널 생성
 
