@@ -6,91 +6,77 @@
     <title>관리자 페이지</title>
 
     <style>
-        /* ============================================
-           Global Reset & Base Styles
-        ============================================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         :root {
-            --primary: #00d4ff;
-            --primary-glow: rgba(0, 212, 255, 0.3);
-            --secondary: #7c3aed;
-            --secondary-glow: rgba(124, 58, 237, 0.2);
-            --glass-bg: rgba(255, 255, 255, 0.03);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --glass-highlight: rgba(255, 255, 255, 0.1);
-            --card-bg: rgba(255, 255, 255, 0.04);
+            --primary: #3b82f6;
+            --primary-soft: rgba(59, 130, 246, 0.15);
+            --surface: rgba(255, 255, 255, 0.03);
+            --surface-hover: rgba(255, 255, 255, 0.06);
+            --border: rgba(255, 255, 255, 0.06);
+            --border-hover: rgba(255, 255, 255, 0.12);
+            --text: #f8fafc;
+            --text-muted: rgba(255, 255, 255, 0.45);
         }
 
         body {
-            background: linear-gradient(135deg, #0a0a0f 0%, #12121a 50%, #0f0f1a 100%);
+            background: #09090b;
             min-height: 100vh;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            color: var(--text);
             padding: 32px;
             position: relative;
         }
 
-        /* Subtle background pattern */
+        /* Subtle gradient overlay */
         body::before {
             content: '';
             position: fixed;
             inset: 0;
-            background-image: 
-                radial-gradient(circle at 20% 20%, var(--primary-glow) 0%, transparent 50%),
-                radial-gradient(circle at 80% 80%, var(--secondary-glow) 0%, transparent 50%);
+            background: 
+                radial-gradient(ellipse 80% 60% at 20% 10%, rgba(59, 130, 246, 0.08), transparent),
+                radial-gradient(ellipse 60% 50% at 80% 90%, rgba(99, 102, 241, 0.06), transparent);
             pointer-events: none;
-            animation: backgroundShift 20s ease-in-out infinite;
         }
 
-        @keyframes backgroundShift {
-            0%, 100% { opacity: 0.5; }
-            50% { opacity: 0.8; }
-        }
-
-        /* ============================================
-           Header
-        ============================================= */
+        /* Header */
         .admin-header {
             display: flex;
             align-items: center;
             gap: 16px;
             margin-bottom: 40px;
             padding-bottom: 24px;
-            border-bottom: 1px solid var(--glass-border);
-            animation: slideDown 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            border-bottom: 1px solid var(--border);
+            animation: fadeDown 0.4s cubic-bezier(0.22, 1, 0.36, 1);
         }
 
-        @keyframes slideDown {
+        @keyframes fadeDown {
             from {
                 opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
+                transform: translateY(-12px);
             }
         }
 
         .admin-icon {
-            width: 56px;
-            height: 56px;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            border-radius: 16px;
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--primary), #6366f1);
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 28px;
-            box-shadow: 0 8px 24px var(--primary-glow);
+        }
+
+        .admin-icon svg {
+            width: 24px;
+            height: 24px;
+            color: white;
         }
 
         h1 {
-            font-size: 28px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #fff, rgba(255,255,255,0.7));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
         }
 
         .live-indicator {
@@ -98,93 +84,64 @@
             align-items: center;
             gap: 8px;
             margin-left: auto;
-            padding: 10px 18px;
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 50px;
+            padding: 8px 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 100px;
             font-size: 13px;
-            color: rgba(255, 255, 255, 0.7);
+            color: var(--text-muted);
         }
 
         .live-dot {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
             background: #10b981;
             border-radius: 50%;
-            animation: livePulse 2s ease-in-out infinite;
+            animation: pulse 2s ease-in-out infinite;
         }
 
-        @keyframes livePulse {
-            0%, 100% { 
-                opacity: 1;
-                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
-            }
-            50% { 
-                opacity: 0.7;
-                box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
-            }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
         }
 
-        /* ============================================
-           Content Grid
-        ============================================= */
+        /* Content Grid */
         #content {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
-            gap: 24px;
+            grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+            gap: 20px;
             position: relative;
             z-index: 1;
         }
 
-        @media (max-width: 560px) {
+        @media (max-width: 540px) {
             #content {
                 grid-template-columns: 1fr;
             }
         }
 
-        /* ============================================
-           Item Card
-        ============================================= */
+        /* Item Card */
         .item {
-            background: var(--card-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 24px;
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            animation: cardAppear 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
-            position: relative;
-            overflow: hidden;
+            background: var(--surface);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            transition: all 0.25s ease;
+            animation: cardEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
         }
 
-        .item::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
-        }
-
-        @keyframes cardAppear {
+        @keyframes cardEnter {
             from {
                 opacity: 0;
-                transform: translateY(30px) scale(0.95);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
+                transform: translateY(20px);
             }
         }
 
         .item:hover {
-            transform: translateY(-4px);
-            border-color: var(--primary);
-            box-shadow: 
-                0 20px 40px rgba(0, 0, 0, 0.3),
-                0 0 0 1px var(--primary-glow);
+            border-color: var(--border-hover);
+            background: var(--surface-hover);
         }
 
         /* Item Header */
@@ -192,149 +149,114 @@
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 20px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--glass-border);
+            margin-bottom: 16px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border);
         }
 
         .item-info {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 4px;
         }
 
         .folder-name {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
             color: var(--primary);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .folder-name::before {
-            content: '📁';
-            font-size: 14px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
         }
 
         .time-stamp {
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.5);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .time-stamp::before {
-            content: '🕐';
             font-size: 12px;
+            color: var(--text-muted);
         }
 
         .item-badge {
-            padding: 6px 14px;
-            background: linear-gradient(135deg, var(--primary-glow), transparent);
-            border: 1px solid var(--primary);
-            border-radius: 50px;
+            padding: 4px 10px;
+            background: var(--primary-soft);
+            border-radius: 100px;
             font-size: 11px;
             font-weight: 600;
             color: var(--primary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
 
         /* Image Row */
         .row {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 16px;
+            gap: 12px;
         }
 
         .img-box {
             position: relative;
-            border-radius: 14px;
+            border-radius: 10px;
             overflow: hidden;
-            background: rgba(0, 0, 0, 0.3);
-            transition: transform 0.3s ease;
-        }
-
-        .img-box:hover {
-            transform: scale(1.02);
-        }
-
-        .img-box::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: 14px;
-            padding: 1px;
-            background: linear-gradient(135deg, var(--glass-highlight), transparent);
-            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            -webkit-mask-composite: xor;
-            mask-composite: exclude;
-            pointer-events: none;
+            background: rgba(0, 0, 0, 0.4);
         }
 
         .img-title {
             position: absolute;
-            top: 12px;
-            left: 12px;
-            padding: 6px 12px;
+            top: 8px;
+            left: 8px;
+            padding: 4px 8px;
             background: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(8px);
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--primary);
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-muted);
             z-index: 2;
-            border: 1px solid var(--glass-border);
         }
 
         .img-box img {
             width: 100%;
             height: auto;
             display: block;
-            transition: transform 0.5s ease;
+            transition: transform 0.3s ease;
         }
 
         .img-box:hover img {
-            transform: scale(1.05);
+            transform: scale(1.02);
         }
 
-        /* ============================================
-           Empty State
-        ============================================= */
+        /* Empty State */
         .empty-state {
             grid-column: 1 / -1;
             text-align: center;
             padding: 80px 40px;
-            background: var(--glass-bg);
-            border: 1px dashed var(--glass-border);
-            border-radius: 20px;
-            animation: fadeIn 0.5s ease;
+            background: var(--surface);
+            border: 1px dashed var(--border);
+            border-radius: 16px;
+            animation: fadeIn 0.4s ease;
         }
 
         @keyframes fadeIn {
             from { opacity: 0; }
-            to { opacity: 1; }
         }
 
         .empty-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 16px;
+            color: var(--text-muted);
             opacity: 0.5;
         }
 
         .empty-text {
-            font-size: 16px;
-            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+            color: var(--text-muted);
         }
     </style>
 </head>
 
 <body>
     <header class="admin-header">
-        <div class="admin-icon">📂</div>
+        <div class="admin-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+        </div>
         <h1>관리자 페이지</h1>
         <div class="live-indicator">
             <span class="live-dot"></span>
@@ -360,11 +282,11 @@
 
                     <div class="row">
                         <div class="img-box">
-                            <div class="img-title">RAW 이미지</div>
+                            <div class="img-title">RAW</div>
                             <img src="/public/${item.folder}/raw.png?cache=${item.timestamp}" alt="RAW">
                         </div>
                         <div class="img-box">
-                            <div class="img-title">결과 이미지</div>
+                            <div class="img-title">Result</div>
                             <img src="/public/${item.folder}/result.png?cache=${item.timestamp}" alt="Result">
                         </div>
                     </div>
@@ -375,45 +297,44 @@
         function updateDOM(newItems) {
             const container = document.getElementById("content");
 
-            // Show empty state if no items
             if (newItems.length === 0 && oldItems.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
-                        <div class="empty-icon">📭</div>
+                        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21 15 16 10 5 21"/>
+                        </svg>
                         <div class="empty-text">아직 처리된 이미지가 없습니다</div>
                     </div>
                 `;
                 return;
             }
 
-            // Remove empty state if items exist
             const emptyState = container.querySelector('.empty-state');
             if (emptyState && newItems.length > 0) {
                 emptyState.remove();
             }
 
-            // 1) 기존 목록과 다르면 새로 추가
             newItems.forEach((item, index) => {
                 const id = `item-${item.folder}`;
                 let el = document.getElementById(id);
 
                 if (!el) {
-                    // 새 요소 → 맨 위에 prepend (최신순)
                     const div = document.createElement("div");
                     div.innerHTML = createItemHTML(item);
                     const newEl = div.firstElementChild;
-                    newEl.style.animationDelay = `${index * 0.1}s`;
+                    newEl.style.animationDelay = `${index * 0.08}s`;
                     container.prepend(newEl);
                 }
             });
 
-            // 2) 기존 목록 중에서 삭제된 항목 제거
             oldItems.forEach(item => {
                 if (!newItems.find(n => n.folder === item.folder)) {
                     const el = document.getElementById(`item-${item.folder}`);
                     if (el) {
-                        el.style.animation = 'cardDisappear 0.3s ease forwards';
-                        setTimeout(() => el.remove(), 300);
+                        el.style.animation = 'cardExit 0.25s ease forwards';
+                        setTimeout(() => el.remove(), 250);
                     }
                 }
             });
@@ -421,13 +342,12 @@
             oldItems = newItems;
         }
 
-        // Add disappear animation
         const style = document.createElement('style');
         style.textContent = `
-            @keyframes cardDisappear {
+            @keyframes cardExit {
                 to {
                     opacity: 0;
-                    transform: translateY(-20px) scale(0.95);
+                    transform: translateY(-12px) scale(0.98);
                 }
             }
         `;

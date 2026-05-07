@@ -5,392 +5,280 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>사진 다운로드</title>
     <style>
-        /* ============================================
-           Global Reset & Base Styles
-        ============================================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         :root {
-            --primary: #00d4ff;
-            --primary-glow: rgba(0, 212, 255, 0.4);
-            --secondary: #7c3aed;
-            --secondary-glow: rgba(124, 58, 237, 0.3);
+            --primary: #3b82f6;
+            --primary-soft: rgba(59, 130, 246, 0.15);
             --success: #10b981;
-            --success-glow: rgba(16, 185, 129, 0.3);
-            --glass-bg: rgba(255, 255, 255, 0.05);
-            --glass-border: rgba(255, 255, 255, 0.1);
-            --glass-highlight: rgba(255, 255, 255, 0.15);
+            --success-soft: rgba(16, 185, 129, 0.15);
+            --surface: rgba(255, 255, 255, 0.04);
+            --surface-hover: rgba(255, 255, 255, 0.08);
+            --border: rgba(255, 255, 255, 0.08);
+            --border-focus: rgba(255, 255, 255, 0.16);
+            --text: #f8fafc;
+            --text-muted: rgba(255, 255, 255, 0.5);
         }
 
         body {
-            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);
+            background: #0c0c0f;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            color: var(--text);
             padding: 40px 20px;
-            overflow-x: hidden;
             position: relative;
+            overflow-x: hidden;
         }
 
-        /* Animated background */
-        body::before,
-        body::after {
-            content: '';
+        /* Ambient lighting */
+        .ambient {
             position: fixed;
-            border-radius: 50%;
-            filter: blur(100px);
-            animation: float 8s ease-in-out infinite;
-            pointer-events: none;
-        }
-
-        body::before {
             width: 500px;
             height: 500px;
-            background: var(--success-glow);
-            top: -200px;
-            right: -100px;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.3;
+            pointer-events: none;
+            animation: drift 15s ease-in-out infinite;
         }
 
-        body::after {
-            width: 400px;
-            height: 400px;
-            background: var(--secondary-glow);
-            bottom: -150px;
-            left: -100px;
-            animation-delay: -4s;
+        .ambient-1 {
+            background: rgba(16, 185, 129, 0.25);
+            top: -250px;
+            right: -150px;
         }
 
-        @keyframes float {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            50% { transform: translate(30px, -30px) scale(1.1); }
+        .ambient-2 {
+            background: rgba(99, 102, 241, 0.2);
+            bottom: -250px;
+            left: -150px;
+            animation-delay: -7s;
         }
 
-        /* ============================================
-           Success Header
-        ============================================= */
-        .success-header {
+        @keyframes drift {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(30px, -30px); }
+        }
+
+        /* Header */
+        .header {
             text-align: center;
             margin-bottom: 32px;
-            animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: fadeDown 0.5s cubic-bezier(0.22, 1, 0.36, 1);
         }
 
-        @keyframes slideDown {
+        @keyframes fadeDown {
             from {
                 opacity: 0;
-                transform: translateY(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
+                transform: translateY(-16px);
             }
         }
 
-        .success-icon {
-            width: 72px;
-            height: 72px;
-            background: linear-gradient(135deg, var(--success), #059669);
-            border-radius: 50%;
+        .status-badge {
             display: inline-flex;
             align-items: center;
-            justify-content: center;
-            font-size: 36px;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--success-soft);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 100px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--success);
             margin-bottom: 16px;
-            box-shadow: 0 8px 32px var(--success-glow);
-            animation: successPulse 2s ease-in-out infinite;
         }
 
-        @keyframes successPulse {
-            0%, 100% { 
-                box-shadow: 0 8px 32px var(--success-glow);
-                transform: scale(1);
-            }
-            50% { 
-                box-shadow: 0 8px 48px var(--success-glow), 0 0 80px var(--success-glow);
-                transform: scale(1.05);
-            }
+        .status-badge svg {
+            width: 16px;
+            height: 16px;
         }
 
         h2 {
-            font-size: 28px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.8) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
         }
 
-        /* ============================================
-           Image Preview Card
-        ============================================= */
+        /* Image Card */
         .image-card {
             position: relative;
-            background: var(--glass-bg);
+            background: var(--surface);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            padding: 20px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 16px;
             margin-bottom: 32px;
-            box-shadow: 
-                0 20px 60px rgba(0, 0, 0, 0.4),
-                inset 0 1px 0 var(--glass-highlight);
-            animation: cardReveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+            animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
         }
 
-        @keyframes cardReveal {
+        @keyframes fadeUp {
             from {
                 opacity: 0;
-                transform: translateY(40px) scale(0.9);
+                transform: translateY(24px);
             }
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
-
-        /* Decorative corner accents */
-        .image-card::before,
-        .image-card::after {
-            content: '';
-            position: absolute;
-            width: 40px;
-            height: 40px;
-            border-radius: 4px;
-            pointer-events: none;
-        }
-
-        .image-card::before {
-            top: -2px;
-            left: -2px;
-            border-top: 3px solid var(--primary);
-            border-left: 3px solid var(--primary);
-            border-top-left-radius: 24px;
-        }
-
-        .image-card::after {
-            bottom: -2px;
-            right: -2px;
-            border-bottom: 3px solid var(--secondary);
-            border-right: 3px solid var(--secondary);
-            border-bottom-right-radius: 24px;
         }
 
         #preview {
             width: 100%;
-            max-width: 400px;
-            border-radius: 16px;
+            max-width: 380px;
+            border-radius: 12px;
             display: block;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         }
 
-        /* ============================================
-           Button Group
-        ============================================= */
+        /* Button Group */
         .button-group {
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 12px;
             width: 100%;
-            max-width: 360px;
-            animation: buttonsSlide 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+            max-width: 340px;
+            animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
         }
 
-        @keyframes buttonsSlide {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        button {
+        .btn {
             width: 100%;
-            padding: 18px 28px;
-            font-size: 16px;
+            padding: 16px 24px;
+            font-size: 15px;
             font-weight: 600;
             border: none;
-            border-radius: 14px;
+            border-radius: 12px;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative;
-            overflow: hidden;
+            transition: all 0.2s ease;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
         }
 
-        button::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-            transition: left 0.5s;
+        .btn svg {
+            width: 18px;
+            height: 18px;
         }
 
-        button:hover::before {
-            left: 100%;
+        .btn:hover {
+            transform: translateY(-1px);
         }
 
-        #qr_btn {
-            background: linear-gradient(135deg, var(--primary), #0099cc);
-            color: #000;
-            box-shadow: 0 4px 20px var(--primary-glow);
+        .btn:active {
+            transform: translateY(0);
         }
 
-        #qr_btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 30px var(--primary-glow), 0 0 60px var(--primary-glow);
+        .btn-primary {
+            background: var(--primary);
+            color: white;
         }
 
-        #download_btn {
-            background: linear-gradient(135deg, var(--success), #059669);
-            color: #fff;
-            box-shadow: 0 4px 20px var(--success-glow);
+        .btn-primary:hover {
+            background: #2563eb;
         }
 
-        #download_btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 30px var(--success-glow), 0 0 60px var(--success-glow);
+        .btn-success {
+            background: var(--success);
+            color: white;
         }
 
-        #back_btn {
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
-            color: rgba(255, 255, 255, 0.8);
-            border: 1px solid var(--glass-border);
-            box-shadow: inset 0 1px 0 var(--glass-highlight);
+        .btn-success:hover {
+            background: #059669;
         }
 
-        #back_btn:hover {
-            background: var(--glass-highlight);
-            transform: translateY(-2px);
-            color: #fff;
+        .btn-secondary {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
         }
 
-        /* ============================================
-           QR Modal
-        ============================================= */
+        .btn-secondary:hover {
+            background: var(--surface-hover);
+            border-color: var(--border-focus);
+        }
+
+        /* QR Modal */
         #qrModal {
             display: none;
             position: fixed;
             z-index: 9999;
             inset: 0;
             background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             align-items: center;
             justify-content: center;
-            animation: fadeIn 0.3s ease;
+            animation: fadeIn 0.25s ease;
         }
 
         @keyframes fadeIn {
             from { opacity: 0; }
-            to { opacity: 1; }
         }
 
         #qrModalContent {
-            background: var(--glass-bg);
-            backdrop-filter: blur(30px);
-            -webkit-backdrop-filter: blur(30px);
-            padding: 48px 40px;
-            border-radius: 28px;
-            border: 1px solid var(--glass-border);
+            background: var(--surface);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            padding: 40px 36px;
+            border-radius: 24px;
+            border: 1px solid var(--border);
             text-align: center;
             width: 90%;
-            max-width: 380px;
-            animation: modalPop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            box-shadow: 
-                0 20px 60px rgba(0, 0, 0, 0.5),
-                inset 0 1px 0 var(--glass-highlight);
+            max-width: 360px;
+            animation: modalEnter 0.35s cubic-bezier(0.22, 1, 0.36, 1);
         }
 
-        @keyframes modalPop {
+        @keyframes modalEnter {
             from {
                 opacity: 0;
-                transform: scale(0.8) translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1) translateY(0);
+                transform: scale(0.94) translateY(16px);
             }
         }
 
         #qrModalContent h3 {
-            font-size: 22px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            background: linear-gradient(135deg, #fff, rgba(255,255,255,0.8));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 6px;
         }
 
         .qr-subtitle {
             font-size: 14px;
-            color: rgba(255, 255, 255, 0.5);
+            color: var(--text-muted);
             margin-bottom: 24px;
         }
 
         .qr-wrapper {
             background: #fff;
-            border-radius: 20px;
-            padding: 20px;
+            border-radius: 16px;
+            padding: 16px;
             display: inline-block;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            animation: qrReveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
-        }
-
-        @keyframes qrReveal {
-            from {
-                opacity: 0;
-                transform: scale(0.8);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
         }
 
         #qr_image {
-            width: 220px;
-            height: 220px;
+            width: 200px;
+            height: 200px;
             display: block;
-            border-radius: 12px;
+            border-radius: 8px;
         }
 
         #closeModal {
-            margin-top: 28px;
-            background: var(--glass-bg);
-            color: #fff;
-            border: 1px solid var(--glass-border);
-        }
-
-        #closeModal:hover {
-            background: var(--glass-highlight);
-        }
-
-        /* Icon styles */
-        .icon {
-            font-size: 20px;
+            margin-top: 24px;
         }
     </style>
 </head>
 <body>
 
-<div class="success-header">
-    <div class="success-icon">✨</div>
-    <h2>사진이 준비되었습니다!</h2>
+<div class="ambient ambient-1"></div>
+<div class="ambient ambient-2"></div>
+
+<div class="header">
+    <div class="status-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        완료
+    </div>
+    <h2>사진이 준비되었습니다</h2>
 </div>
 
 <div class="image-card">
@@ -398,33 +286,44 @@
 </div>
 
 <div class="button-group">
-    <button id="qr_btn" onclick="openQRModal()">
-        <span class="icon">📱</span>
-        <span>다운로드 QR 표시</span>
+    <button class="btn btn-primary" onclick="openQRModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"/>
+            <rect x="14" y="3" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/>
+        </svg>
+        QR로 다운로드
     </button>
 
-    <button id="download_btn" onclick="downloadImage()">
-        <span class="icon">💾</span>
-        <span>사진 다운로드</span>
+    <button class="btn btn-success" onclick="downloadImage()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        사진 다운로드
     </button>
 
-    <button id="back_btn" onclick="history.back()">
-        <span class="icon">↩</span>
-        <span>처음으로</span>
+    <button class="btn btn-secondary" onclick="history.back()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        처음으로
     </button>
 </div>
 
 <!-- QR Modal -->
 <div id="qrModal">
     <div id="qrModalContent">
-        <h3>📱 휴대폰으로 다운로드</h3>
-        <p class="qr-subtitle">아래 QR을 스캔하세요</p>
+        <h3>휴대폰으로 다운로드</h3>
+        <p class="qr-subtitle">QR 코드를 스캔하세요</p>
         
         <div class="qr-wrapper">
             <img id="qr_image" src="" alt="QR Code">
         </div>
 
-        <button id="closeModal" onclick="closeQRModal()">닫기</button>
+        <button class="btn btn-secondary" id="closeModal" onclick="closeQRModal()">닫기</button>
     </div>
 </div>
 
@@ -446,14 +345,13 @@ function openQRModal() {
 
     modal.style.display = "flex";
 
-    // QR 파일 로딩 (polling 방식)
     function tryLoad() {
         fetch(`/static/qr/${folder}.png`)
             .then(r => {
                 if (r.ok) {
                     qrImg.src = `/static/qr/${folder}.png`;
                 } else {
-                    console.log("QR이 아직 없습니다, 재시도 중...");
+                    console.log("QR not ready, retrying...");
                     setTimeout(tryLoad, 300);
                 }
             });
