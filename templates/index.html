@@ -372,12 +372,62 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Countdown Overlay */
+        .countdown-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+        }
+
+        .countdown-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .countdown-number {
+            font-size: 150px;
+            font-weight: 700;
+            color: var(--text);
+            text-shadow: 0 0 60px var(--primary-glow);
+            animation: countdownPulse 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        @keyframes countdownPulse {
+            0% {
+                opacity: 0;
+                transform: scale(2);
+            }
+            30% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            80% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+        }
     </style>
 </head>
 <body>
 
 <div class="ambient ambient-1"></div>
 <div class="ambient ambient-2"></div>
+
+<div id="countdownOverlay" class="countdown-overlay">
+    <span id="countdownNumber" class="countdown-number"></span>
+</div>
 
 <div class="container">
     <div class="logo-section">
@@ -426,10 +476,10 @@
         <div class="select-wrapper">
             <select id="styleSelect" onchange="checkSelections()">
                 <option value="" selected disabled>적용할 스타일을 선택하세요</option>
-                <option value="none">[원본 반환] 변환하지 않기</option>
+                <option value="none">변환하지 않기</option>
                 <option value="distortion_lens_filter">[필터] 볼록거울</option>
-                <option value="anime">[스타일] 애니메이션</option>
                 <option value="watercolor">[스타일] 수채화</option>
+                <option value="anime">[스타일] 애니메이션</option>
                 <option value="comic">[스타일] 코믹북</option>
             </select>
         </div>
@@ -467,6 +517,37 @@ document.addEventListener("keydown", function(event) {
 });
 
 function capture() {
+    startCountdown();
+}
+
+function startCountdown() {
+    const overlay = document.getElementById("countdownOverlay");
+    const numberEl = document.getElementById("countdownNumber");
+    let count = 3;
+
+    overlay.classList.add("active");
+    
+    function showNumber() {
+        numberEl.textContent = count;
+        numberEl.style.animation = 'none';
+        numberEl.offsetHeight; // trigger reflow
+        numberEl.style.animation = 'countdownPulse 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards';
+        
+        if (count > 1) {
+            count--;
+            setTimeout(showNumber, 800);
+        } else {
+            setTimeout(() => {
+                overlay.classList.remove("active");
+                takePhoto();
+            }, 800);
+        }
+    }
+    
+    showNumber();
+}
+
+function takePhoto() {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     canvas.width = 1920;
