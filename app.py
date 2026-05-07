@@ -192,7 +192,7 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
                 "height": orig_h,
                 "resize_mode": 1,
                 "cfg_scale": cfg["cfg_scale"],
-                "scale_by": 1.28,
+                "scale_by": 1,
                 "alwayson_scripts": {
                     "controlnet": {
                         "args": [{"enabled": True,
