@@ -154,6 +154,33 @@
             transform: scaleX(-1);
         }
 
+        /* --- Countdown Overlay --- */
+        #countdownOverlay {
+            position: absolute;
+            inset: 0;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.2);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .count-number {
+            font-size: 84px;
+            font-weight: 800;
+            color: white;
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+            animation: countAnim 1s ease-in-out infinite;
+        }
+
+        @keyframes countAnim {
+            0% { transform: scale(1.5); opacity: 0; }
+            30% { transform: scale(1); opacity: 1; }
+            70% { transform: scale(0.9); opacity: 1; }
+            100% { transform: scale(0.5); opacity: 0; }
+        }
+
         /* Buttons */
         .btn {
             width: 100%;
@@ -393,11 +420,12 @@
     
     <div class="video-container">
         <video id="video" autoplay playsinline></video>
+        <div id="countdownOverlay"></div>
         <div class="video-corner tl"></div>
         <div class="video-corner br"></div>
     </div>
     
-    <button class="btn" onclick="capture()">
+    <button id="captureBtn" class="btn" onclick="startCountdown()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
             <circle cx="12" cy="13" r="4"/>
@@ -465,6 +493,33 @@ document.addEventListener("keydown", function(event) {
         btnContinue.innerText = "계속 진행";
     }
 });
+
+/* --- 카운트다운 로직 추가 --- */
+function startCountdown() {
+    const overlay = document.getElementById("countdownOverlay");
+    const captureBtn = document.getElementById("captureBtn");
+    let count = 3;
+
+    captureBtn.disabled = true; // 카운트 중 중복 클릭 방지
+    overlay.style.display = "flex";
+    
+    // 첫 숫자(3) 표시
+    overlay.innerHTML = `<div class="count-number">${count}</div>`;
+
+    const timer = setInterval(() => {
+        count--;
+        if (count > 0) {
+            // 애니메이션 초기화를 위해 HTML 다시 삽입
+            overlay.innerHTML = `<div class="count-number">${count}</div>`;
+        } else {
+            clearInterval(timer);
+            overlay.style.display = "none";
+            overlay.innerHTML = "";
+            captureBtn.disabled = false;
+            capture(); // 0초가 되면 촬영 실행
+        }
+    }, 1000);
+}
 
 function capture() {
     const canvas = document.getElementById("canvas");
