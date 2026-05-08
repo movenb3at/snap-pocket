@@ -375,15 +375,16 @@
 
         /* Countdown Overlay */
         .countdown-overlay {
-            position: fixed;
+            position: absolute; /* fixed에서 absolute로 변경하여 카메라 프레임에 종속 */
             inset: 0;
-            background: rgba(0, 0, 0, 0);
+            background: transparent; /* 어두워지지 않도록 투명 처리 */
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 2000;
+            z-index: 10;
             opacity: 0;
             visibility: hidden;
+            pointer-events: none; /* 클릭 이벤트 방해 방지 */
             transition: opacity 0.2s ease, visibility 0.2s ease;
         }
 
@@ -425,10 +426,6 @@
 <div class="ambient ambient-1"></div>
 <div class="ambient ambient-2"></div>
 
-<div id="countdownOverlay" class="countdown-overlay">
-    <span id="countdownNumber" class="countdown-number"></span>
-</div>
-
 <div class="container">
     <div class="logo-section">
         <div class="logo-mark">
@@ -445,6 +442,10 @@
         <video id="video" autoplay playsinline></video>
         <div class="video-corner tl"></div>
         <div class="video-corner br"></div>
+        
+        <div id="countdownOverlay" class="countdown-overlay">
+            <span id="countdownNumber" class="countdown-number"></span>
+        </div>
     </div>
     
     <button class="btn" onclick="capture()">
