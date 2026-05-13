@@ -200,6 +200,7 @@ Made by: **moveNb3at | SnapPocket Dev Team**
 AI Powered by: **Stable Diffusion WebUI (A1111)**
 
 ---
-
+> 더 많은 정보는 여기서 확인 가능합니다.
+> [SNAP-POCKET 구축 가이드](https://docs.google.com/document/d/1q48TmpIc9Sp4wrk9G2zxNS0PNHSYADuGRAVy11EnbCk/edit?usp=sharing)
 
 🧡 **스냅 한 장, 포켓 속으로 — SnapPocket**
