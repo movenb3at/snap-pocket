@@ -190,7 +190,7 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
 
             elif style_key == "canny_filter": # canny 필터
                 img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
-                edges = cv2.Canny(img_cv, 33, 100)
+                edges = cv2.Canny(img_cv, 50, 150)
                 edges_colored = cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
                 _, buffer = cv2.imencode('.png', edges_colored)
                 result_b64 = base64.b64encode(buffer).decode()
