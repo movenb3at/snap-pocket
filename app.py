@@ -16,6 +16,14 @@ import socket
 import cv2
 import numpy as np
 import copy
+import logging
+
+# --- 로깅 설정 ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -70,13 +78,17 @@ def get_lan_ip():
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
 
+    except Exception:
+        ip = "127.0.0.1"
+        logger.warning("LAN IP detection failed, defaulting to localhost.")
+
     finally:
         s.close()
     
     return ip
 
 LAN_URL = f"http://{get_lan_ip()}:5000/main_page"
-print("LAN URL:", LAN_URL)
+logger.info(f"LAN URL: {LAN_URL}")
 
 
 # ----------------------------------------------
@@ -117,10 +129,10 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
             STYLE_CONFIG = json.load(f)["checkpoints"]
 
     except Exception as e:
-        print(f"[ERROR] checkpoints.json load failed: {e}")
+        logger.error(f"checkpoints.json load failed: {e}")
     
     else:
-        print(f"[INFO] checkpoints.json loaded successfully.")
+        logger.info("checkpoints.json loaded successfully.")
         
         cfg = copy.deepcopy(STYLE_CONFIG.get(style_key, {}))
         cfg.update(overrides)
@@ -146,7 +158,7 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
             if gender_ad_neg or base_ad_neg:
                 cfg["ad_negative_prompt"] = f"{gender_ad_neg}, {base_ad_neg}".strip(", ")
                 
-            print(f"[INFO] Applied Gender/Group Prompts for: {gender}, with style: {style_key}")
+            logger.info(f"Applied Gender/Group Prompts for: {gender}, with style: {style_key}")
 
         raw_path = os.path.join(TEMP_DIR, session_id, "raw.png")
         img = Image.open(raw_path)
@@ -175,7 +187,14 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
 
             elif style_key == "face_filter": # 얼굴 필터
                 pass # 얼굴 필터 로직 추가 (추후 구현 예정)
-            
+
+            elif style_key == "canny_filter": # canny 필터
+                img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
+                edges = cv2.Canny(img_cv, 100, 200)
+                edges_colored = cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
+                _, buffer = cv2.imencode('.png', edges_colored)
+                result_b64 = base64.b64encode(buffer).decode()
+
             else: 
                 result_b64 = init_b64 # 원본 반환
 
@@ -208,7 +227,6 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
                                 "threshold_b": 100.0,
                                 "control_mode": "ControlNet is more important"}]
                     }
-                    
                     # 과도한 보정으로 ADetailer는 일단 보류 (원본과 너무 달라지는 문제 발생)
                     # "ADetailer": {
                         # "args": [{"ad_model": cfg.get("ad_model", "mediapipe_face_full"),
@@ -217,7 +235,6 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
                                 # "ad_denoising_strength": cfg.get("ad_denoising_strength", 0.2),
                                 # "ad_confidence": 0.3}]
                     #}
-
                 }
             }
             
@@ -227,7 +244,7 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
                 result_b64 = r.json()["images"][0]
                 
             except Exception as e:
-                print(f"[ERROR] Stable Diffusion API Request failed: {e}")
+                logger.error(f"Stable Diffusion API Request failed: {e}")
                 result_b64 = init_b64
 
         preview_path = os.path.join(PREVIEW_DIR, f"{session_id}.png")
@@ -338,7 +355,7 @@ def admin_page():
 class FolderEvent(FileSystemEventHandler):
     def on_created(self, event):
         if event.is_directory:
-            print("[INFO] New Folder Detected:", event.src_path)
+            logger.info(f"New Folder Detected: {event.src_path}")
 
 def start_watcher():
     observer = Observer()
