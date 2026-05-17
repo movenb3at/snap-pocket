@@ -79,8 +79,7 @@ def get_lan_ip():
         ip = s.getsockname()[0]
 
     except Exception:
-        ip = "127.0.0.1"
-        logger.warning("LAN IP detection failed, defaulting to localhost.")
+        logger.error("Is this device connected to a network? LAN IP detection failed.")
 
     finally:
         s.close()
