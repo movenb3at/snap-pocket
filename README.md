@@ -178,6 +178,7 @@ tunnel_url.txt → https://random-xxxx-xxxx.trycloudflare.com 저장
 - [26/04/02] 성별 선택 기능 및 성별 당 프롬프트 설정 기능 추가
 - [26/05/04] 프론트엔드 디자인 업데이트 및 병렬 처리 기능 추가
 - [26/05/17] 로깅 기능 추가 및 기존 print문 대체
+- [26/05/18] admin.html 비밀번호 기능 추가 (admin)
 ---
 
 ## Future Vision
