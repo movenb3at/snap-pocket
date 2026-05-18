@@ -24,11 +24,77 @@
             min-height: 100vh;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             color: var(--text);
-            padding: 32px;
             position: relative;
         }
 
-        /* Subtle gradient overlay */
+        /* 로그인 화면 스타일 */
+        #login-overlay {
+            position: fixed;
+            inset: 0;
+            background: #09090b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .login-box {
+            background: var(--surface);
+            padding: 40px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            text-align: center;
+            width: 100%;
+            max-width: 360px;
+        }
+
+        .login-box h2 {
+            margin-bottom: 24px;
+            font-size: 20px;
+        }
+
+        .login-box input {
+            width: 100%;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: rgba(0, 0, 0, 0.2);
+            color: white;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .login-box input:focus {
+            border-color: var(--primary);
+        }
+
+        .login-box button {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .login-box button:hover {
+            opacity: 0.9;
+        }
+
+        /* 메인 콘텐츠 래퍼 (초기엔 숨김) */
+        #app-content {
+            display: none;
+            padding: 32px;
+        }
+
+        /* 기존 스타일들 유지 */
         body::before {
             content: '';
             position: fixed;
@@ -39,7 +105,6 @@
             pointer-events: none;
         }
 
-        /* Header */
         .admin-header {
             display: flex;
             align-items: center;
@@ -51,10 +116,7 @@
         }
 
         @keyframes fadeDown {
-            from {
-                opacity: 0;
-                transform: translateY(-12px);
-            }
+            from { opacity: 0; transform: translateY(-12px); }
         }
 
         .admin-icon {
@@ -67,17 +129,8 @@
             justify-content: center;
         }
 
-        .admin-icon svg {
-            width: 24px;
-            height: 24px;
-            color: white;
-        }
-
-        h1 {
-            font-size: 24px;
-            font-weight: 600;
-            letter-spacing: -0.3px;
-        }
+        .admin-icon svg { width: 24px; height: 24px; color: white; }
+        h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.3px; }
 
         .live-indicator {
             display: flex;
@@ -105,7 +158,6 @@
             50% { opacity: 0.4; }
         }
 
-        /* Content Grid */
         #content {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
@@ -114,13 +166,8 @@
             z-index: 1;
         }
 
-        @media (max-width: 540px) {
-            #content {
-                grid-template-columns: 1fr;
-            }
-        }
+        @media (max-width: 540px) { #content { grid-template-columns: 1fr; } }
 
-        /* Item Card */
         .item {
             background: var(--surface);
             backdrop-filter: blur(16px);
@@ -133,10 +180,7 @@
         }
 
         @keyframes cardEnter {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
+            from { opacity: 0; transform: translateY(20px); }
         }
 
         .item:hover {
@@ -144,7 +188,6 @@
             background: var(--surface-hover);
         }
 
-        /* Item Header */
         .item-header {
             display: flex;
             justify-content: space-between;
@@ -154,24 +197,10 @@
             border-bottom: 1px solid var(--border);
         }
 
-        .item-info {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .folder-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--primary);
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
-        }
-
-        .time-stamp {
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-
+        .item-info { display: flex; flex-direction: column; gap: 4px; }
+        .folder-name { font-size: 14px; font-weight: 600; color: var(--primary); font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace; }
+        .time-stamp { font-size: 12px; color: var(--text-muted); }
+        
         .item-badge {
             padding: 4px 10px;
             background: var(--primary-soft);
@@ -181,92 +210,93 @@
             color: var(--primary);
         }
 
-        /* Image Row */
-        .row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-
-        .img-box {
-            position: relative;
-            border-radius: 10px;
-            overflow: hidden;
-            background: rgba(0, 0, 0, 0.4);
-        }
-
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .img-box { position: relative; border-radius: 10px; overflow: hidden; background: rgba(0, 0, 0, 0.4); }
         .img-title {
-            position: absolute;
-            top: 8px;
-            left: 8px;
-            padding: 4px 8px;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(8px);
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 500;
-            color: var(--text-muted);
-            z-index: 2;
+            position: absolute; top: 8px; left: 8px; padding: 4px 8px;
+            background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px);
+            border-radius: 6px; font-size: 11px; font-weight: 500; color: var(--text-muted); z-index: 2;
         }
+        .img-box img { width: 100%; height: auto; display: block; transition: transform 0.3s ease; }
+        .img-box:hover img { transform: scale(1.02); }
 
-        .img-box img {
-            width: 100%;
-            height: auto;
-            display: block;
-            transition: transform 0.3s ease;
-        }
-
-        .img-box:hover img {
-            transform: scale(1.02);
-        }
-
-        /* Empty State */
         .empty-state {
-            grid-column: 1 / -1;
-            text-align: center;
-            padding: 80px 40px;
-            background: var(--surface);
-            border: 1px dashed var(--border);
-            border-radius: 16px;
-            animation: fadeIn 0.4s ease;
+            grid-column: 1 / -1; text-align: center; padding: 80px 40px;
+            background: var(--surface); border: 1px dashed var(--border);
+            border-radius: 16px; animation: fadeIn 0.4s ease;
         }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-        }
-
-        .empty-icon {
-            width: 48px;
-            height: 48px;
-            margin: 0 auto 16px;
-            color: var(--text-muted);
-            opacity: 0.5;
-        }
-
-        .empty-text {
-            font-size: 14px;
-            color: var(--text-muted);
-        }
+        @keyframes fadeIn { from { opacity: 0; } }
+        .empty-icon { width: 48px; height: 48px; margin: 0 auto 16px; color: var(--text-muted); opacity: 0.5; }
+        .empty-text { font-size: 14px; color: var(--text-muted); }
     </style>
 </head>
 
 <body>
-    <header class="admin-header">
-        <div class="admin-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
+    <div id="login-overlay">
+        <div class="login-box">
+            <h2>관리자 인증</h2>
+            <input type="password" id="pwd-input" placeholder="비밀번호를 입력하세요">
+            <button id="login-btn">접속하기</button>
         </div>
-        <h1>관리자 페이지</h1>
-        <div class="live-indicator">
-            <span class="live-dot"></span>
-            <span>실시간 업데이트</span>
-        </div>
-    </header>
+    </div>
 
-    <div id="content"></div>
+    <div id="app-content">
+        <header class="admin-header">
+            <div class="admin-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+            </div>
+            <h1>관리자 페이지</h1>
+            <div class="live-indicator">
+                <span class="live-dot"></span>
+                <span>실시간 업데이트</span>
+            </div>
+        </header>
+
+        <div id="content"></div>
+    </div>
 
     <script>
+        // --- 로그인 로직 시작 ---
+        // 'admin' 문자열의 SHA-256 해시값입니다. 코드에 'admin' 글자가 남지 않습니다.
+        const TARGET_HASH = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918';
+
+        // 입력받은 비밀번호를 암호화(해시)하는 함수
+        async function hashPassword(password) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(password);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function attemptLogin() {
+            const input = document.getElementById('pwd-input').value;
+            const hashedInput = await hashPassword(input);
+
+            if (hashedInput === TARGET_HASH) {
+                // 로그인 성공: 로그인 창 숨기고 메인 화면 표시
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('app-content').style.display = 'block';
+                
+                // 데이터 로딩 시작
+                loadData();
+                setInterval(loadData, 3000);
+            } else {
+                alert('비밀번호가 일치하지 않습니다.');
+                document.getElementById('pwd-input').value = ''; // 입력창 초기화
+            }
+        }
+
+        document.getElementById('login-btn').addEventListener('click', attemptLogin);
+        document.getElementById('pwd-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') attemptLogin();
+        });
+        // --- 로그인 로직 끝 ---
+
+
+        // --- 기존 데이터 로드 로직 ---
         let oldItems = [];
 
         function createItemHTML(item) {
@@ -354,14 +384,16 @@
         document.head.appendChild(style);
 
         async function loadData() {
-            const res = await fetch("/admin_data");
-            const items = await res.json();
-            updateDOM(items);
+            try {
+                const res = await fetch("/admin_data");
+                if (res.ok) {
+                    const items = await res.json();
+                    updateDOM(items);
+                }
+            } catch (e) {
+                console.error("데이터를 불러오는데 실패했습니다.", e);
+            }
         }
-
-        loadData();
-        setInterval(loadData, 3000);
     </script>
-
 </body>
 </html>
