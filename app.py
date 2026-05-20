@@ -19,9 +19,28 @@ import copy
 import logging
 
 # --- 로깅 설정 ---
+class ColorFormatter(logging.Formatter):
+    RESET = "\x1b[0m"
+    COLORS = {
+        logging.DEBUG: "\x1b[36m",     # 청록색
+        logging.INFO: "\x1b[32m",      # 초록색
+        logging.WARNING: "\x1b[33m",   # 노란색
+        logging.ERROR: "\x1b[31m",     # 빨간색
+        logging.CRITICAL: "\x1b[41;37m" # 빨간 배경 + 흰색 글씨
+    }
+
+    def format(self, record):
+        log_color = self.COLORS.get(record.levelno, self.RESET)
+        format_str = f"{log_color}[%(asctime)s][%(levelname)s|%(filename)s:%(lineno)s] --- %(message)s{self.RESET}"
+        formatter = logging.Formatter(format_str)
+        return formatter.format(record)
+
+handler = logging.StreamHandler()
+handler.setFormatter(ColorFormatter())
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    handlers=[handler]
 )
 logger = logging.getLogger(__name__)
 
