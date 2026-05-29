@@ -1,7 +1,3 @@
-# ----------------------------------------------
-# 메인 애플리케이션 코드 (Celery 적용)
-# ----------------------------------------------
-
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from celery import Celery
 import os, uuid, hashlib, json, base64, time
@@ -18,7 +14,7 @@ import numpy as np
 import copy
 import logging
 
-# --- 로깅 설정 ---
+# 로깅 설정
 class ColorFormatter(logging.Formatter):
     RESET = "\x1b[0m"
     COLORS = {
@@ -46,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# --- Celery 설정 ---
+# Celery 설정
 app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
 app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
 
@@ -55,9 +51,7 @@ celery.conf.update(app.config)
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-# ----------------------------------------------
 # 기본 경로 설정
-# ----------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMP_DIR = os.path.join(BASE_DIR, "temp")
 PUBLIC_DIR = os.path.join(BASE_DIR, "public")
@@ -109,14 +103,10 @@ LAN_URL = f"http://{get_lan_ip()}:5000/main_page"
 logger.info(f"LAN URL: {LAN_URL}")
 
 
-# ----------------------------------------------
 # SD AUTOMATIC1111 API URL
-# ----------------------------------------------
 SD_URL = "http://127.0.0.1:7860/sdapi/v1/img2img"
 
-# ----------------------------------------------
 # 사진 업로드 (임시 저장)
-# ----------------------------------------------
 @app.route("/upload_temp", methods=["POST"])
 def upload_temp():
     data = request.json
@@ -133,9 +123,7 @@ def upload_temp():
 
     return jsonify({"session_id": session_id})
 
-# ----------------------------------------------
-# 변환 Task (백그라운드에서 실행됨)
-# ----------------------------------------------
+# 변환 Task
 @celery.task(bind=True)
 def process_transform_task(self, session_id, style_key, gender, overrides):
 
@@ -271,9 +259,8 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
 
         return result_b64
 
-# ----------------------------------------------
-# 변환 시작 라우트 (Task 큐에 넣기만 함)
-# ----------------------------------------------
+
+# 변환 시작
 @app.route("/transform", methods=["POST"])
 def transform():
     data = request.json
@@ -286,9 +273,7 @@ def transform():
     
     return jsonify({"task_id": task.id}), 202
 
-# ----------------------------------------------
-# 상태 확인 라우트
-# ----------------------------------------------
+# 상태 확인
 @app.route("/status/<task_id>", methods=["GET"])
 def task_status(task_id):
     task = process_transform_task.AsyncResult(task_id)
@@ -300,9 +285,7 @@ def task_status(task_id):
         response = {"state": task.state, "status": "오류 발생"}
     return jsonify(response)
 
-# ----------------------------------------------
 # URL 생성 + QR 생성
-# ----------------------------------------------
 @app.route("/finalize", methods=["POST"])
 def finalize():
     data = request.json
@@ -341,9 +324,7 @@ def finalize():
         "qrcode_b64": "data:image/png;base64," + qr_b64
     })
 
-# ----------------------------------------------
 # 다운로드 페이지
-# ----------------------------------------------
 @app.route("/dl/<folder>/")
 def download_page(folder):
     return render_template("download.html", folder=folder)
@@ -352,9 +333,7 @@ def download_page(folder):
 def serve_image(folder, filename):
     return send_from_directory(os.path.join(PUBLIC_DIR, folder), filename)
 
-# ----------------------------------------------
 # 관리자 페이지
-# ----------------------------------------------
 @app.route("/admin")
 def admin_page():
     folders = os.listdir(PUBLIC_DIR)
@@ -367,9 +346,7 @@ def admin_page():
             result.append({"folder": f, "time": ts})
     return render_template("admin.html", items=result)
 
-# ----------------------------------------------
 # 폴더 감지 (watchdog)
-# ----------------------------------------------
 class FolderEvent(FileSystemEventHandler):
     def on_created(self, event):
         if event.is_directory:
