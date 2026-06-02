@@ -464,9 +464,9 @@
         <img id="capturedImgDisplay" src="" alt="Captured Image">
         <p class="info-text">이 사진으로 진행할까요?<br>코인기에 코인을 넣으면 버튼이 활성화됩니다.</p>
         <div class="btn-group">
-            <button class="btn btn-secondary" onclick="retakePhoto()">다시 찍기</button>
+            <button id="retakeBtn" class="btn btn-secondary" onclick="retakePhoto()">다시 찍기</button>
             <button id="btnContinue" class="btn" onclick="goToStyleSelect()" disabled>계속 진행</button>
-        </div>
+        </div>      
     </div>
 </div>
 
@@ -511,15 +511,18 @@ navigator.mediaDevices.getUserMedia({
 document.addEventListener("keydown", function(event) {
     const previewModal = document.getElementById("previewModal");
     const btnContinue = document.getElementById("btnContinue");
+    const retakeBtn = document.getElementById("retakeBtn");
+    
     if (previewModal.style.display === "flex" && event.ctrlKey && event.altKey && event.code === "KeyP") {
         event.preventDefault();
         btnContinue.disabled = false;
         btnContinue.innerText = "계속 진행";
+        retakeBtn.disabled = true;
     }
 });
 
 function capture() {
-    document.getElementById("captureBtn").disabled = true; // 버튼 비활성화
+    document.getElementById("captureBtn").disabled = true;
     startCountdown();
 }
 
@@ -533,7 +536,7 @@ function startCountdown() {
     function showNumber() {
         numberEl.textContent = count;
         numberEl.style.animation = 'none';
-        numberEl.offsetHeight; // trigger reflow
+        numberEl.offsetHeight;
         numberEl.style.animation = 'countdownPulse 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards';
         
         if (count > 1) {
@@ -578,16 +581,19 @@ function showPreviewModal(imageSrc) {
     const modal = document.getElementById("previewModal");
     const imgDisplay = document.getElementById("capturedImgDisplay");
     const btnContinue = document.getElementById("btnContinue");
+    const retakeBtn = document.getElementById("retakeBtn");
+    
     imgDisplay.src = imageSrc;
     modal.style.backgroundImage = `url('${imageSrc}')`;
     btnContinue.disabled = true;
     btnContinue.innerText = "계속 진행";
+    retakeBtn.disabled = false;
     modal.style.display = "flex";
 }
 
 function retakePhoto() {
     document.getElementById("previewModal").style.display = "none";
-    document.getElementById("captureBtn").disabled = false; // 촬영 버튼 다시 활성화
+    document.getElementById("captureBtn").disabled = false;
 }
 
 function goToStyleSelect() {
