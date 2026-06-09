@@ -191,7 +191,7 @@ SnapPocket은 촬영의 끝이 **저장과 공유**가 되는 UX를 목표로 �
 
 ## License
 
-MIT License
+AGPL-3.0 License
 
 ---
 
