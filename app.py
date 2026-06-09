@@ -93,7 +93,8 @@ def get_lan_ip():
 
     except Exception:
         logger.error("Is this device connected to a network? LAN IP detection failed.")
-
+        ip = "127.0.0.1" # Fallback
+        
     finally:
         s.close()
     
