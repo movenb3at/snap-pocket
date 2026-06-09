@@ -30,6 +30,7 @@
             color: var(--text);
             overflow: hidden;
             position: relative;
+            padding: 20px;
         }
 
         /* Subtle ambient glow */
@@ -62,19 +63,21 @@
             50% { transform: translate(40px, -40px); }
         }
 
-        /* Container */
+        /* Container (웹캠 영역 확장을 위해 최대 너비 840px로 수정) */
         .container {
             background: var(--surface);
             backdrop-filter: blur(24px);
             -webkit-backdrop-filter: blur(24px);
             border: 1px solid var(--border);
             border-radius: 24px;
-            padding: 48px 40px;
+            padding: 40px;
             width: 100%;
-            max-width: 420px;
+            max-width: 840px;
             position: relative;
             z-index: 1;
             animation: enter 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+            display: flex;
+            flex-direction: column;
         }
 
         @keyframes enter {
@@ -87,7 +90,7 @@
         /* Logo */
         .logo-section {
             text-align: center;
-            margin-bottom: 32px;
+            margin-bottom: 28px;
         }
 
         .logo-mark {
@@ -98,7 +101,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
             position: relative;
         }
 
@@ -114,7 +117,7 @@
             letter-spacing: -0.5px;
         }
 
-        /* Video */
+        /* Video (컨테이너가 커짐에 따라 자연스럽게 대형화) */
         .video-container {
             position: relative;
             width: 100%;
@@ -122,7 +125,7 @@
             background: #000;
             border-radius: 16px;
             overflow: hidden;
-            margin-bottom: 24px;
+            margin-bottom: 28px;
             border: 1px solid var(--border);
         }
 
@@ -170,6 +173,12 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
+        }
+
+        /* 촬영하기 버튼이 너무 가로로 늘어지지 않도록 너비 제한 및 중앙 정렬 */
+        #captureBtn {
+            max-width: 320px;
+            margin: 0 auto;
         }
 
         .btn:hover:not(:disabled) {
@@ -236,7 +245,7 @@
             position: relative;
             z-index: 2;
             width: 90%;
-            max-width: 400px;
+            max-width: 440px;
             display: flex;
             flex-direction: column;
             gap: 20px;
@@ -373,18 +382,18 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Countdown Overlay */
+        /* Countdown Overlay (화면이 커진 만큼 카운트다운 텍스트 크기 증가 및 밸런스 조정) */
         .countdown-overlay {
-            position: absolute; /* fixed에서 absolute로 변경하여 카메라 프레임에 종속 */
+            position: absolute;
             inset: 0;
-            background: transparent; /* 어두워지지 않도록 투명 처리 */
+            background: rgba(0, 0, 0, 0.2); /* 가시성을 위해 살짝 음영 추가 */
             display: flex;
             justify-content: center;
             align-items: center;
             z-index: 10;
             opacity: 0;
             visibility: hidden;
-            pointer-events: none; /* 클릭 이벤트 방해 방지 */
+            pointer-events: none;
             transition: opacity 0.2s ease, visibility 0.2s ease;
         }
 
@@ -394,7 +403,7 @@
         }
 
         .countdown-number {
-            font-size: 150px;
+            font-size: 180px;
             font-weight: 700;
             color: var(--text);
             text-shadow: 0 0 60px var(--primary-glow);
