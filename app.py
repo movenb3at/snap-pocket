@@ -328,7 +328,7 @@ def finalize():
 # 다운로드 페이지
 @app.route("/dl/<folder>/")
 def download_page(folder):
-    return render_template("download.html", folder=folder)
+    return render_template("download.html", folder=folder, lan_url=LAN_URL)
 
 @app.route("/public/<folder>/<filename>")
 def serve_image(folder, filename):
