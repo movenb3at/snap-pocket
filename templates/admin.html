@@ -258,11 +258,8 @@
     </div>
 
     <script>
-        // --- 로그인 로직 시작 ---
-        // 'admin' 문자열의 SHA-256 해시값입니다. 코드에 'admin' 글자가 남지 않습니다.
         const TARGET_HASH = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918';
 
-        // 입력받은 비밀번호를 암호화(해시)하는 함수
         async function hashPassword(password) {
             const encoder = new TextEncoder();
             const data = encoder.encode(password);
@@ -276,16 +273,14 @@
             const hashedInput = await hashPassword(input);
 
             if (hashedInput === TARGET_HASH) {
-                // 로그인 성공: 로그인 창 숨기고 메인 화면 표시
                 document.getElementById('login-overlay').style.display = 'none';
                 document.getElementById('app-content').style.display = 'block';
                 
-                // 데이터 로딩 시작
                 loadData();
                 setInterval(loadData, 3000);
             } else {
                 alert('비밀번호가 일치하지 않습니다.');
-                document.getElementById('pwd-input').value = ''; // 입력창 초기화
+                document.getElementById('pwd-input').value = '';
             }
         }
 
@@ -293,10 +288,7 @@
         document.getElementById('pwd-input').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') attemptLogin();
         });
-        // --- 로그인 로직 끝 ---
 
-
-        // --- 기존 데이터 로드 로직 ---
         let oldItems = [];
 
         function createItemHTML(item) {
