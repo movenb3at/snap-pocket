@@ -20,6 +20,9 @@ build/
 .env
 .env.local
 
+# vscode 설정
+.vscode/
+
 # 포토부스 이미지 파일
 public/**/*.png
 static/**/*.png
