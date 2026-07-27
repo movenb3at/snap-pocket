@@ -9,6 +9,9 @@
 >
 > SnapPocket — Capture. Transform. Save.
 
+**Portable Version is available at [movenb3at/snap-pocket-portable](https://github.com/movenb3at/snap-pocket-portable).**
+
+
 SnapPocket is a web-based AI photobooth system that automates the entire experience—from camera capture and AI style transformation to QR-based photo delivery.
 
 - AI style transformation powered by Stable Diffusion and `img2img`
