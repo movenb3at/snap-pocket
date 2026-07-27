@@ -1,209 +1,341 @@
-> P.S. 이 리포지토리를 사용하기 전, checkpoints.json과 index.html은 자신이 다운받은 stable diffusion 모델에 따라 수정하셔야합니다. 실행 시 참고바랍니다.
->
+> **[IMPORTANT]**
+> Before running this repository, update `checkpoints.json` and `templates/index.html` to match the Stable Diffusion models installed on your system. Model names, paths, and style settings must agree with your local WebUI configuration.
+
 ---
 
 # SnapPocket — AI Photobooth System
 
----
-
 > 스냅 한 장, 포켓 속으로.
-> 
+>
 > SnapPocket — Capture. Transform. Save.
-> 
 
+SnapPocket is a web-based AI photobooth system that automates the entire experience—from camera capture and AI style transformation to QR-based photo delivery.
 
-SnapPocket은 카메라 촬영 → AI 스타일 변환 → QR 다운로드를 **웹 기반으로 자동 처리**하는 스타일 포토부스 시스템입니다.
-
-- Stable Diffusion 기반 AI 스타일 변환
-- QR로 즉시 사진 다운로드
-- 관리자 페이지에서 촬영 기록 실시간 모니터링
-- 축제, 행사, 웨딩, 브랜드 이벤트 등에 최적화
+- AI style transformation powered by Stable Diffusion and `img2img`
+- Instant photo downloads through QR codes
+- Real-time monitoring of captured and generated images from the admin page
+- Local-network operation with optional public access through Cloudflare Tunnel
+- Designed for festivals, weddings, brand activations, arcades, and other events
 
 ---
 
 ## Features
 
-| 기능 | 상세 설명 |
+| Feature | Description |
 | --- | --- |
-| 카메라 촬영 웹 페이지 | 사용자 인터페이스(UI) 기반 촬영 |
-| AI 이미지 스타일 변환 | Stable Diffusion + img2img |
-| QR 다운로드 | 모바일 다운로드 최적화 |
-| 관리자 시스템 | 모든 촬영 결과 실시간 리스트업 |
-| LAN & Public 접근 | 동일 와이파이 + 외부 접속 모두 지원 |
-| 폴더 감지 | 실시간 이미지 생성 반영(watchdog) |
+| Browser-based camera UI | Captures photos through a streamlined web interface |
+| AI image transformation | Applies configured styles through Stable Diffusion WebUI and `img2img` |
+| QR-code delivery | Generates mobile-friendly download links for processed photos |
+| Admin dashboard | Lists original and generated images in real time |
+| LAN and public access | Supports trusted local networks and optional Cloudflare Tunnel URLs |
+| Folder monitoring | Detects newly generated images in real time with Watchdog |
+| Parallel processing support | Uses Memurai, a Redis-compatible service for Windows, to support concurrent jobs |
 
 ---
 
 ## System Architecture
 
-```
+```text
 [Camera UI] → [Flask Server] → [Stable Diffusion API]
      ↓                                ↓
- QR 생성 & 공유 ← 변환 결과 저장 ← 관리자 페이지
-
+[QR Generation & Sharing] ← [Save Transformed Results] ← [Admin Dashboard]
 ```
 
 ---
 
 ## Tech Stack
 
-| 영역 | 기술 |
+| Area | Technology |
 | --- | --- |
 | Backend | Python, Flask, Watchdog |
-| AI Engine | Stable Diffusion (API: Automatic1111 img2img) |
-| QR | qrcode(Python) |
-| UI | HTML / CSS / JavaScript |
-| Image Processing | Pillow (PIL) |
-| Deployment | Cloudflared (optional public QR), Local LAN access |
+| AI engine | Stable Diffusion WebUI (AUTOMATIC1111), `img2img`, ControlNet, optional ADetailer |
+| Job processing | Memurai (Redis-compatible service for Windows) |
+| QR generation | `qrcode` for Python |
+| Frontend | HTML, CSS, JavaScript |
+| Image processing | Pillow (PIL) |
+| Connectivity | Local LAN access, optional Cloudflare Tunnel |
+
+---
+
+## Requirements
+
+### Host PC
+
+- Windows (other operating systems have not been fully tested)
+- At least 16 GB of RAM
+- NVIDIA GeForce RTX 3060 Ti or a comparable or faster NVIDIA GPU
+- Python and Git
+- Stable Diffusion WebUI by AUTOMATIC1111
+- Memurai installed and registered as a Windows service
+
+GPU performance directly affects image-generation time.
+
+### Client PC
+
+- A computer capable of running a modern web browser
+- An FHD (1080p), 60 Hz or better webcam
+- Network access to the host PC or the generated Cloudflare Tunnel URL
 
 ---
 
 ## Project Structure
 
-```
+```text
 main/
-   ├─ app.py              # Flask backend server
-   ├─ checkpoints.json    # Style configuration
-   ├─ templates/
-   │   ├─ index.html      # Main UI
-   │   ├─ download.html   # Download page UI
-   │   └─ admin.html      # Admin UI
-   ├─ static/
-   │   ├─ preview/        # Temporary AI result images
-   │   └─ qr/             # Generated QR codes
-   ├─ public/                # Final user-accessible images
-   ├─ temp/                  # Raw image storage
-   ├─ run.bat                # Automated Start Process
-   ├─ requirements.txt       # Python library requirements
-   └─ tunnel_url.txt         # Cloudflared public domain
-
+├── app.py                 # Flask backend server
+├── checkpoints.json       # AI model and style configuration
+├── templates/
+│   ├── index.html         # Main camera UI
+│   ├── download.html      # Photo download page
+│   └── admin.html         # Admin dashboard
+├── static/
+│   ├── preview/           # Temporary AI-generated previews
+│   └── qr/                # Generated QR codes
+├── usage/                 # Example photos of GUI
+├── public/                # Final user-accessible images
+├── temp/                  # Raw captured images
+├── run.bat                # Automated startup script
+├── requirements.txt       # Python dependencies
+└── tunnel_url.txt         # Current Cloudflare Tunnel URL
 ```
+---
+
+## Usage Photos
+![main_page_screenshot](./usage/2.png)
+![download_page_screenshot](./usage/3.png)
+![admin_page_before_login_screenshot](./usage/4.png)
+![admin_page_after_login_screenshot](./usage/1.png)
 
 ---
 
-## Installation & Setup
+## Installation and Setup
 
-### 1. 사전 다운로드 및 Stable Diffusion WebUI 실행
-[여기서 A1111을 다운받아서 아래 단계를 계속해주세요.](https://github.com/AUTOMATIC1111/stable-diffusion-webui)
+### 1. Install Stable Diffusion WebUI
 
-[여기서 Controlnet 모델을 다운받아서 stable diffusion에 대응하는 폴더에 넣어주세요.](https://huggingface.co/lllyasviel/sd-controlnet-canny/blob/main/diffusion_pytorch_model.safetensors)
+Install [AUTOMATIC1111 Stable Diffusion WebUI](https://github.com/AUTOMATIC1111/stable-diffusion-webui) by following its official setup instructions.
 
-[여기서 Adetailer 모델을 다운받아서 stable diffusion에 대응하는 폴더에 넣어주세요.](https://huggingface.co/Bingsu/adetailer/blob/main/face_yolov8m.pt)
+### 2. Enable API access and xFormers
 
+Open `webui-user.bat` in the `stable-diffusion-webui` directory and set the launch arguments to:
 
-AUTOMATIC1111 실행:
-
-```
-./webui-user.bat
+```bat
+set COMMANDLINE_ARGS=--api --xformers
 ```
 
-API와 xformers 활성화 옵션 포함 필요:
+Run `webui-user.bat`, then confirm that the WebUI is available at:
 
-```
---api --xformers --reinstall-xformers
-```
-
-### 2. Python Dependencies 설치
-
-```
-pip install -r requirements.txt
+```text
+http://127.0.0.1:7860
 ```
 
-### 3. 서버 실행
+### 3. Install ControlNet
 
-```
-run.bat 실행
+1. In Stable Diffusion WebUI, open **Extensions → Install from URL**.
+2. Enter the following repository URL and install it:
+
+   ```text
+   https://github.com/Mikubill/sd-webui-controlnet.git
+   ```
+
+3. Open the **Installed** tab and select **Apply and restart UI**.
+4. Download the [ControlNet Canny model](https://huggingface.co/lllyasviel/sd-controlnet-canny/blob/main/diffusion_pytorch_model.safetensors).
+5. Place the model file in:
+
+   ```text
+   stable-diffusion-webui/extensions/sd-webui-controlnet/models/
+   ```
+
+### 4. Install ADetailer (optional)
+
+ADetailer can improve facial details, although stronger corrections may produce results that differ more noticeably from the original photo.
+
+1. Install the following repository through **Extensions → Install from URL**:
+
+   ```text
+   https://github.com/Bing-su/adetailer.git
+   ```
+
+2. Apply the changes and restart the WebUI.
+3. Download the recommended [`face_yolov8m.pt` model](https://huggingface.co/Bingsu/adetailer/blob/main/face_yolov8m.pt) and place it in the ADetailer model directory used by your WebUI installation.
+
+### 5. Install Memurai
+
+Install Memurai to provide the Redis-compatible service required for parallel processing. During setup, register it as a Windows service and confirm that the service is running before starting SnapPocket.
+
+### 6. Clone SnapPocket
+
+Download the repository as a ZIP file or clone it with Git:
+
+```bash
+git clone https://github.com/movenb3at/snap-pocket.git
+cd snap-pocket/main
 ```
 
-웹 접속:
+### 7. Install Python dependencies
 
+```bash
+python -m pip install -r requirements.txt
 ```
+
+### 8. Configure models and styles
+
+Update the following files before launch:
+
+- `checkpoints.json`: match model names, checkpoint paths, prompts, and available styles to your Stable Diffusion installation.
+- `templates/index.html`: make sure the styles and options shown in the UI match the entries configured in `checkpoints.json`.
+
+### 9. Start the services
+
+Run:
+
+```bat
+run.bat
+```
+
+The script opens three Command Prompt windows for the required services. Keep all three windows open while SnapPocket is running.
+
+The local application is available at:
+
+```text
 http://127.0.0.1:5000/main_page
 ```
 
-### 4. Public Access (via Cloudflared)
+### 10. Update the Cloudflare Tunnel URL
 
-터널 생성
+Copy the Cloudflare URL displayed in the first Command Prompt window, paste it into `tunnel_url.txt`, and save the file.
 
-```
-run.bat 실행
+The temporary `trycloudflare.com` address changes each time the services restart, so `tunnel_url.txt` must be updated after every launch.
+
+To open the public camera page, append `/main_page` to the generated address:
+
+```text
+https://<generated-address>.trycloudflare.com/main_page
 ```
 
-성공 시:
-
-```
-tunnel_url.txt → https://random-xxxx-xxxx.trycloudflare.com 저장
-```
+Omitting `/main_page` may result in a 404 response.
 
 ---
 
-## Usage Flow
+## Client Setup
 
-사용자:
+### 1. Open the camera page
 
-1. 웹 페이지에서 카메라 권한 허용
-2. 촬영 버튼 클릭
-3. 스타일 선택 → AI 변환 진행
-4. QR코드 스캔 → 휴대폰에서 다운로드
+Connect the client PC through either the generated Cloudflare URL or the host PC's LAN URL:
 
-관리자:
+```text
+http://<host-ipv4-address>:5000/main_page
+```
 
-1. `/admin` 접속
-2. 최신 생성 이미지 자동 정렬
-3. 원본 + 결과 이미지 확인
+For example:
+
+```text
+http://192.168.0.10:5000/main_page
+```
+
+### 2. Connect and verify the webcam
+
+Connect the FHD webcam to the client PC, allow camera access in the browser, and confirm that the live camera preview appears correctly.
+
+### 3. Use the keyboard shortcut instead of a coin mechanism
+
+When a physical coin mechanism is not connected, press `Ctrl+Alt+P` after taking a photo to provide the equivalent input.
+
+### 4. Allow camera access on an HTTP LAN origin
+
+Chrome may block camera access on a non-HTTPS LAN address. On a trusted local network only:
+
+1. Run `ipconfig` on the host PC.
+2. Find the IPv4 address under **Wireless LAN adapter Wi-Fi**.
+3. Build the exact LAN URL, including the port:
+
+   ```text
+   http://<host-ipv4-address>:5000
+   ```
+
+4. In Chrome, open:
+
+   ```text
+   chrome://flags/#unsafely-treat-insecure-origin-as-secure
+   ```
+
+5. Add the LAN origin to **Insecure origins treated as secure**.
+6. Restart Chrome and reopen the camera page.
+
+Only add origins that you control and trust. Use HTTPS for public access.
+
+---
+
+## Usage
+
+### Guest Flow
+
+1. Open the camera page and allow camera access.
+2. Capture a photo.
+3. Choose a style and wait for the AI transformation to finish.
+4. Scan the generated QR code.
+5. Download the result to a mobile device.
+
+### Admin Flow
+
+1. Open `/admin` on the host, LAN, or public base URL.
+2. Review the latest images, which are listed automatically.
+3. Compare original captures with generated results.
+
+If the repository is still using a default admin password, change it before exposing the service publicly.
 
 ---
 
 ## Use Cases
 
-| 행사 환경 | 활용 예시 |
+| Environment | Example |
 | --- | --- |
-| 학교 축제 | 학생 포토존 자동화 |
-| 웨딩 | 포토부스 실시간 공유 |
-| 브랜드 프로모션 | 이벤트 스냅 공유 유도 |
-| 아케이드형 | 상시 설치 운영 |
+| School festival | Automated student photo zone |
+| Wedding | Real-time photobooth sharing |
+| Brand promotion | Branded event photos and social sharing |
+| Arcade or permanent venue | Always-on self-service installation |
 
 ---
 
-## Roadmap
+## Project History
 
-- [25/11/13] 프로젝트 구상 완료
-- [25/11/17] 프로젝트 개발 시작
-- [25/11/21] 프로젝트 개발 완료
-- [25/11/24] README.MD 생성
-- [25/12/12] Github 리포지토리 업로드
-- [26/01/30] 예외 처리 추가
-- [26/03/27] 사진 확인 단축키 변경 (space -> ctrl+alt+p)
-- [26/03/28] Adetailer 보정 알고리즘 추가 -> 보류
-- [26/04/02] 성별 선택 기능 및 성별 당 프롬프트 설정 기능 추가
-- [26/05/04] 프론트엔드 디자인 업데이트 및 병렬 처리 기능 추가
-- [26/05/17] 로깅 기능 추가 및 기존 print문 대체
-- [26/05/18] admin.html 비밀번호 기능 추가 (admin)
-- [26/06/10] download.html에서 "처음으로" 버튼 로직 변경 (history.back() -> LAN_URL)
+- [2025-11-13] Project concept completed
+- [2025-11-17] Development started
+- [2025-11-21] Initial development completed
+- [2025-11-24] README created
+- [2025-12-12] Repository published to GitHub
+- [2026-01-30] Exception handling added
+- [2026-03-27] Photo confirmation shortcut changed from `Space` to `Ctrl+Alt+P`
+- [2026-03-28] ADetailer correction algorithm added, then placed on hold
+- [2026-04-02] Gender selection and gender-specific prompt configuration added
+- [2026-05-04] Frontend design updated and parallel processing added
+- [2026-05-17] Logging added and existing `print` statements replaced
+- [2026-05-18] Password protection added to `admin.html`
+- [2026-06-10] The **Back to Start** button in `download.html` changed from `history.back()` to `LAN_URL`
+
 ---
 
-## Future Vision
+## Vision
 
-SnapPocket은 촬영의 끝이 **저장과 공유**가 되는 UX를 목표로 합니다.
+SnapPocket is designed to make saving and sharing the natural conclusion of every photo experience.
 
-오프라인 공간에 AI를 연결하여, **기억을 즉시 디지털화**합니다.
+By bringing AI into physical event spaces, it turns moments into downloadable digital memories in seconds.
 
 ---
 
 ## License
 
-AGPL-3.0 License
+This project is licensed under the AGPL-3.0 License.
 
 ---
 
 ## Credits
 
-Made by: **moveNb3at | SnapPocket Dev Team**
+Created by **moveNb3at | SnapPocket Dev Team**
 
-AI Powered by: **Stable Diffusion WebUI (A1111)**
+AI powered by **Stable Diffusion WebUI (AUTOMATIC1111)**
 
 ---
-> 더 많은 정보는 여기서 확인 가능합니다.
-> [SNAP-POCKET 구축 가이드](https://docs.google.com/document/d/1q48TmpIc9Sp4wrk9G2zxNS0PNHSYADuGRAVy11EnbCk/edit?usp=sharing)
+
+For a more detailed setup walkthrough, see the korean document here. [스냅포켓 구축 가이드](https://docs.google.com/document/d/1q48TmpIc9Sp4wrk9G2zxNS0PNHSYADuGRAVy11EnbCk/edit?tab=t.0)
 
 🧡 **스냅 한 장, 포켓 속으로 — SnapPocket**
