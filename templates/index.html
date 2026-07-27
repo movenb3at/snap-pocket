@@ -155,6 +155,8 @@
             height: 100%;
             object-fit: cover;
             transform: scaleX(-1);
+            will-change: transform;
+            backface-visibility: hidden;
         }
 
         /* Buttons */
@@ -428,6 +430,340 @@
                 transform: scale(0.8);
             }
         }
+
+        :root {
+            --primary: #ff5c35;
+            --primary-soft: rgba(255, 92, 53, 0.16);
+            --primary-glow: rgba(255, 92, 53, 0.28);
+            --surface: rgba(255, 252, 246, 0.92);
+            --surface-hover: rgba(26, 23, 32, 0.06);
+            --border: rgba(34, 28, 43, 0.11);
+            --border-focus: rgba(34, 28, 43, 0.22);
+            --text: #211d29;
+            --text-muted: rgba(33, 29, 41, 0.58);
+        }
+
+        body {
+            min-height: 100svh;
+            padding: clamp(14px, 3vw, 32px);
+            overflow-x: hidden;
+            overflow-y: auto;
+            background:
+                radial-gradient(circle at 14% 18%, rgba(255, 198, 74, 0.28), transparent 28%),
+                radial-gradient(circle at 88% 82%, rgba(92, 224, 198, 0.20), transparent 30%),
+                #17131d;
+            font-family: Inter, Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.28;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 42px 42px;
+            mask-image: linear-gradient(to bottom, black, transparent 88%);
+        }
+
+        .ambient {
+            width: 520px;
+            height: 520px;
+            filter: blur(110px);
+            opacity: 0.62;
+        }
+
+        .ambient-1 {
+            background: rgba(255, 92, 53, 0.22);
+        }
+
+        .ambient-2 {
+            background: rgba(87, 229, 198, 0.18);
+        }
+
+        .container {
+            max-width: 920px;
+            padding: clamp(18px, 3vw, 34px);
+            border-radius: 32px;
+            border: 1px solid rgba(255, 255, 255, 0.82);
+            background: var(--surface);
+            box-shadow:
+                0 34px 90px rgba(5, 4, 9, 0.38),
+                inset 0 1px 0 rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(28px) saturate(125%);
+            -webkit-backdrop-filter: blur(28px) saturate(125%);
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 22px;
+            text-align: left;
+        }
+
+        .logo-section::after {
+            content: "AI PHOTO BOOTH";
+            margin-left: auto;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+        }
+
+        .logo-mark {
+            width: 46px;
+            height: 46px;
+            margin-bottom: 0;
+            border-radius: 14px;
+            background: var(--primary);
+            box-shadow: 0 10px 24px rgba(255, 92, 53, 0.30);
+            transform: rotate(-3deg);
+        }
+
+        .logo-mark svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        h2 {
+            font-size: clamp(22px, 3vw, 28px);
+            font-weight: 800;
+            letter-spacing: -0.045em;
+        }
+
+        .video-container {
+            margin-bottom: 24px;
+            border: 8px solid #fff;
+            border-radius: 24px;
+            background: #0f0d13;
+            box-shadow:
+                0 16px 34px rgba(33, 29, 41, 0.16),
+                0 0 0 1px var(--border);
+        }
+
+        .video-container::after {
+            content: "";
+            display: none;
+            position: absolute;
+            inset: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.20);
+            border-radius: 10px;
+            pointer-events: none;
+        }
+
+        .video-corner {
+            display: none;
+            width: 28px;
+            height: 28px;
+            z-index: 3;
+            border-color: #ffcf4d;
+            opacity: 1;
+        }
+
+        .video-corner.tl {
+            top: 18px;
+            left: 18px;
+            border-top-width: 3px;
+            border-left-width: 3px;
+        }
+
+        .video-corner.br {
+            right: 18px;
+            bottom: 18px;
+            border-right-width: 3px;
+            border-bottom-width: 3px;
+        }
+
+        .btn {
+            min-height: 54px;
+            padding: 15px 24px;
+            border-radius: 16px;
+            background: var(--primary);
+            box-shadow: 0 10px 22px rgba(255, 92, 53, 0.22);
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: -0.01em;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        #captureBtn {
+            max-width: 360px;
+            border: 5px solid rgba(255, 255, 255, 0.82);
+            border-radius: 999px;
+            box-shadow:
+                0 0 0 1px rgba(255, 92, 53, 0.24),
+                0 14px 28px rgba(255, 92, 53, 0.27);
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #eb4724;
+            box-shadow: 0 14px 30px rgba(255, 92, 53, 0.30);
+            transform: translateY(-2px);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: translateY(1px) scale(0.99);
+        }
+
+        .btn:focus-visible,
+        select:focus-visible {
+            outline: 3px solid rgba(255, 199, 61, 0.78);
+            outline-offset: 3px;
+        }
+
+        .btn:disabled {
+            background: #ded8d0;
+            color: rgba(33, 29, 41, 0.42);
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            border: 1px solid var(--border);
+            background: #f0ebe3;
+            color: var(--text);
+            box-shadow: none;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            border-color: var(--border-focus);
+            background: #e8e1d8;
+            box-shadow: none;
+        }
+
+        .preview-backdrop {
+            background: rgba(17, 14, 22, 0.78);
+            backdrop-filter: blur(34px) saturate(90%);
+            -webkit-backdrop-filter: blur(34px) saturate(90%);
+        }
+
+        .preview-content {
+            max-width: 500px;
+            gap: 18px;
+            padding: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.78);
+            border-radius: 28px;
+            background: rgba(255, 252, 246, 0.96);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.42);
+        }
+
+        #capturedImgDisplay {
+            border: 0;
+            border-radius: 18px;
+            box-shadow: 0 12px 30px rgba(33, 29, 41, 0.17);
+        }
+
+        .info-text {
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        #styleModal {
+            background: rgba(17, 14, 22, 0.74);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .style-content {
+            max-width: 420px;
+            padding: 34px 30px 30px;
+            border: 1px solid rgba(255, 255, 255, 0.76);
+            border-radius: 28px;
+            background: rgba(255, 252, 246, 0.98);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.38);
+        }
+
+        .style-content h3 {
+            margin-bottom: 24px;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.035em;
+        }
+
+        select {
+            min-height: 54px;
+            border-color: var(--border);
+            border-radius: 14px;
+            background: #f3eee7;
+            color: var(--text);
+            font-family: inherit;
+            font-weight: 650;
+        }
+
+        select:hover {
+            border-color: var(--border-focus);
+            background: #ebe5dc;
+        }
+
+        option {
+            background: #fffaf3;
+            color: var(--text);
+        }
+
+        .countdown-overlay {
+            background: rgba(12, 10, 16, 0.28);
+            backdrop-filter: blur(2px);
+        }
+
+        .countdown-number {
+            color: #fff;
+            font-size: clamp(96px, 20vw, 180px);
+            font-weight: 900;
+            text-shadow: 0 8px 40px rgba(0, 0, 0, 0.48);
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 14px;
+                border-radius: 24px;
+            }
+
+            .logo-section {
+                margin-bottom: 14px;
+            }
+
+            .logo-section::after {
+                padding: 6px 9px;
+                font-size: 8px;
+            }
+
+            .logo-mark {
+                width: 40px;
+                height: 40px;
+                border-radius: 12px;
+            }
+
+            .video-container {
+                margin-bottom: 18px;
+                border-width: 5px;
+                border-radius: 18px;
+            }
+
+            .preview-content,
+            .style-content {
+                width: calc(100% - 24px);
+                padding: 14px;
+                border-radius: 22px;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -513,7 +849,7 @@ const video = document.getElementById("video");
 let capturedDataURL = "";
 
 navigator.mediaDevices.getUserMedia({ 
-    video: { width: { ideal: 3840 }, height: { ideal: 2160 } } 
+    video: { width: { ideal: 1920 }, height: { ideal: 1080 } } 
 })
 .then(stream => video.srcObject = stream);
 

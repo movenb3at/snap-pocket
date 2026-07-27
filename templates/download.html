@@ -264,6 +264,259 @@
         #closeModal {
             margin-top: 24px;
         }
+
+        :root {
+            --primary: #ff5c35;
+            --primary-soft: rgba(255, 92, 53, 0.16);
+            --success: #148567;
+            --success-soft: rgba(20, 133, 103, 0.13);
+            --surface: rgba(255, 252, 246, 0.93);
+            --surface-hover: rgba(33, 29, 41, 0.06);
+            --border: rgba(33, 29, 41, 0.11);
+            --border-focus: rgba(33, 29, 41, 0.22);
+            --text: #211d29;
+            --text-muted: rgba(33, 29, 41, 0.58);
+        }
+
+        body {
+            min-height: 100svh;
+            justify-content: flex-start;
+            padding: clamp(34px, 7vh, 72px) 20px 42px;
+            background:
+                radial-gradient(circle at 12% 14%, rgba(255, 197, 70, 0.28), transparent 25%),
+                radial-gradient(circle at 88% 82%, rgba(89, 222, 192, 0.20), transparent 30%),
+                #17131d;
+            font-family: Inter, Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.24;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 42px 42px;
+        }
+
+        .ambient {
+            opacity: 0.54;
+        }
+
+        .ambient-1 {
+            background: rgba(255, 92, 53, 0.22);
+        }
+
+        .ambient-2 {
+            background: rgba(89, 222, 192, 0.18);
+        }
+
+        .header {
+            position: relative;
+            z-index: 1;
+            margin-bottom: 24px;
+        }
+
+        .status-badge {
+            margin-bottom: 14px;
+            padding: 8px 14px;
+            border-color: rgba(94, 229, 196, 0.26);
+            background: rgba(94, 229, 196, 0.12);
+            color: #79e8cd;
+            font-weight: 750;
+            letter-spacing: -0.01em;
+        }
+
+        h2 {
+            color: #fffaf3;
+            font-size: clamp(26px, 5vw, 38px);
+            font-weight: 850;
+            letter-spacing: -0.045em;
+        }
+
+        .image-card {
+            z-index: 1;
+            margin-bottom: 28px;
+            padding: 14px 14px 48px;
+            border: 1px solid rgba(255, 255, 255, 0.82);
+            border-radius: 8px;
+            background: #fffcf6;
+            box-shadow:
+                0 32px 72px rgba(4, 3, 8, 0.42),
+                0 0 0 1px rgba(33, 29, 41, 0.08);
+            transform: rotate(-0.6deg);
+        }
+
+        .image-card::after {
+            content: "SNAPPOCKET  /  YOUR MOMENT, READY TO GO";
+            position: absolute;
+            right: 15px;
+            bottom: 16px;
+            left: 15px;
+            color: rgba(33, 29, 41, 0.52);
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-align: center;
+        }
+
+        #preview {
+            width: min(76vw, 480px);
+            max-width: none;
+            aspect-ratio: 16 / 9;
+            border-radius: 3px;
+            background:
+                linear-gradient(135deg, rgba(255, 107, 69, 0.18), rgba(89, 222, 192, 0.16)),
+                #e9e3da;
+            object-fit: cover;
+        }
+
+        .button-group {
+            z-index: 1;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            width: min(100%, 520px);
+            max-width: none;
+            gap: 12px;
+        }
+
+        .button-group .btn-secondary {
+            grid-column: 1 / -1;
+        }
+
+        .btn {
+            min-height: 54px;
+            border-radius: 16px;
+            font-family: inherit;
+            font-weight: 800;
+            letter-spacing: -0.015em;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+        }
+
+        .btn:active {
+            transform: translateY(1px) scale(0.99);
+        }
+
+        .btn:focus-visible {
+            outline: 3px solid rgba(255, 199, 61, 0.82);
+            outline-offset: 3px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+        }
+
+        .btn-primary:hover {
+            background: #eb4724;
+        }
+
+        .btn-success {
+            background: #148567;
+        }
+
+        .btn-success:hover {
+            background: #0d7157;
+        }
+
+        .btn-secondary {
+            border-color: rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fffaf3;
+            box-shadow: none;
+        }
+
+        .btn-secondary:hover {
+            border-color: rgba(255, 255, 255, 0.30);
+            background: rgba(255, 255, 255, 0.13);
+        }
+
+        #qrModal {
+            background: rgba(13, 10, 17, 0.82);
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+        }
+
+        #qrModalContent {
+            max-width: 390px;
+            padding: 34px 28px 28px;
+            border: 1px solid rgba(255, 255, 255, 0.80);
+            border-radius: 28px;
+            background: #fffcf6;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.42);
+        }
+
+        #qrModalContent h3 {
+            font-size: 22px;
+            font-weight: 850;
+            letter-spacing: -0.035em;
+        }
+
+        .qr-wrapper {
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            box-shadow: 0 10px 28px rgba(33, 29, 41, 0.10);
+        }
+
+        #qr_image {
+            border-radius: 10px;
+        }
+
+        #closeModal {
+            color: var(--text);
+            border-color: var(--border);
+            background: #efe9e1;
+        }
+
+        #closeModal:hover {
+            border-color: var(--border-focus);
+            background: #e5ded5;
+        }
+
+        @media (max-width: 560px) {
+            body {
+                padding: 28px 16px 32px;
+            }
+
+            .header {
+                margin-bottom: 20px;
+            }
+
+            #preview {
+                width: min(82vw, 480px);
+            }
+
+            .image-card {
+                padding: 10px 10px 42px;
+            }
+
+            .button-group {
+                grid-template-columns: 1fr;
+            }
+
+            .button-group .btn-secondary {
+                grid-column: auto;
+            }
+
+            #qrModalContent {
+                padding: 28px 20px 20px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+            }
+        }
     </style>
 </head>
 <body>
