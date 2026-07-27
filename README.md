@@ -314,6 +314,7 @@ If the repository is still using a default admin password, change it before expo
 - [2026-05-17] Logging added and existing `print` statements replaced
 - [2026-05-18] Password protection added to `admin.html`
 - [2026-06-10] The **Back to Start** button in `download.html` changed from `history.back()` to `LAN_URL`
+- [2026-07-28] Completely changed the design of HTML files.
 
 ---
 
