@@ -208,6 +208,9 @@
             -webkit-backdrop-filter: blur(16px);
             align-items: center;
             justify-content: center;
+            padding: 32px 24px;
+            box-sizing: border-box;
+            overflow-y: auto;
             animation: fadeIn 0.25s ease;
         }
 
@@ -215,7 +218,99 @@
             from { opacity: 0; }
         }
 
+        .qr-modal-layout {
+            display: grid;
+            grid-template-columns: minmax(240px, 320px) minmax(330px, 420px) minmax(240px, 320px);
+            align-items: center;
+            justify-content: center;
+            gap: 28px;
+            width: min(1200px, 100%);
+        }
+
+        .save-guide {
+            width: 100%;
+            padding: 24px 22px;
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            border-radius: 24px;
+            background: rgba(255, 252, 246, 0.96);
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.34);
+            color: var(--text);
+            text-align: left;
+            box-sizing: border-box;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition:
+                opacity 0.28s ease,
+                transform 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+                visibility 0s linear 0.36s;
+        }
+
+        .save-guide-galaxy {
+            grid-column: 1;
+            transform: translateX(22px);
+        }
+
+        .save-guide-iphone {
+            grid-column: 3;
+            transform: translateX(-22px);
+        }
+
+        #qrModal.show-save-guides .save-guide {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transform: translateX(0);
+            transition-delay: 0s;
+        }
+
+        .save-guide-platform {
+            display: inline-flex;
+            align-items: center;
+            min-height: 28px;
+            padding: 0 10px;
+            margin-bottom: 12px;
+            border-radius: 999px;
+            background: var(--primary-soft);
+            color: var(--primary);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+        }
+
+        .save-guide-iphone .save-guide-platform {
+            background: rgba(20, 133, 103, 0.13);
+            color: var(--success);
+        }
+
+        .save-guide h4 {
+            margin: 0 0 14px;
+            font-size: 18px;
+            font-weight: 850;
+            letter-spacing: -0.025em;
+        }
+
+        .save-guide ol {
+            display: grid;
+            gap: 10px;
+            margin: 0;
+            padding-left: 20px;
+            color: var(--text-muted);
+            font-size: 14px;
+            line-height: 1.55;
+        }
+
+        .save-guide li::marker {
+            color: var(--primary);
+            font-weight: 800;
+        }
+
+        .save-guide-iphone li::marker {
+            color: var(--success);
+        }
+
         #qrModalContent {
+            grid-column: 2;
             background: var(--surface);
             backdrop-filter: blur(24px);
             -webkit-backdrop-filter: blur(24px);
@@ -223,8 +318,8 @@
             border-radius: 24px;
             border: 1px solid var(--border);
             text-align: center;
-            width: 90%;
-            max-width: 360px;
+            width: 100%;
+            max-width: 420px;
             animation: modalEnter 0.35s cubic-bezier(0.22, 1, 0.36, 1);
         }
 
@@ -261,8 +356,12 @@
             border-radius: 8px;
         }
 
+        #saveGuideToggle {
+            margin-top: 20px;
+        }
+
         #closeModal {
-            margin-top: 24px;
+            margin-top: 10px;
         }
 
         :root {
@@ -445,7 +544,7 @@
         }
 
         #qrModalContent {
-            max-width: 390px;
+            max-width: 420px;
             padding: 34px 28px 28px;
             border: 1px solid rgba(255, 255, 255, 0.80);
             border-radius: 28px;
@@ -478,6 +577,70 @@
         #closeModal:hover {
             border-color: var(--border-focus);
             background: #e5ded5;
+        }
+
+        #saveGuideToggle {
+            color: var(--text);
+            border-color: rgba(255, 92, 53, 0.24);
+            background: var(--primary-soft);
+            box-shadow: none;
+        }
+
+        #saveGuideToggle:hover,
+        #saveGuideToggle[aria-expanded="true"] {
+            border-color: rgba(255, 92, 53, 0.44);
+            background: rgba(255, 92, 53, 0.22);
+        }
+
+        @media (max-width: 920px) {
+            #qrModal {
+                align-items: flex-start;
+                padding: 24px 16px;
+            }
+
+            .qr-modal-layout {
+                grid-template-columns: minmax(0, 390px);
+                gap: 14px;
+            }
+
+            #qrModalContent {
+                grid-column: 1;
+                grid-row: 1;
+                width: 100%;
+            }
+
+            .save-guide {
+                grid-column: 1;
+                width: 100%;
+                max-height: 0;
+                padding: 0 22px;
+                border-width: 0;
+                overflow: hidden;
+                transform: translateY(-12px);
+                transition:
+                    opacity 0.28s ease,
+                    transform 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+                    max-height 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+                    padding 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+                    border-width 0s linear 0.36s,
+                    visibility 0s linear 0.36s;
+            }
+
+            .save-guide-galaxy {
+                grid-row: 2;
+            }
+
+            .save-guide-iphone {
+                grid-row: 3;
+            }
+
+            #qrModal.show-save-guides .save-guide {
+                max-height: 360px;
+                padding: 22px;
+                border-width: 1px;
+                transform: translateY(0);
+                transition-delay: 0s;
+            }
         }
 
         @media (max-width: 560px) {
@@ -515,6 +678,8 @@
                 scroll-behavior: auto !important;
                 animation-duration: 0.01ms !important;
                 animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                transition-delay: 0s !important;
             }
         }
     </style>
@@ -567,16 +732,41 @@
 </div>
 
 <!-- QR Modal -->
-<div id="qrModal">
-    <div id="qrModalContent">
-        <h3>휴대폰으로 다운로드</h3>
-        <p class="qr-subtitle">QR 코드를 스캔하세요</p>
-        
-        <div class="qr-wrapper">
-            <img id="qr_image" src="" alt="QR Code">
+<div id="qrModal" role="dialog" aria-modal="true" aria-labelledby="qrModalTitle">
+    <div class="qr-modal-layout">
+        <aside class="save-guide save-guide-galaxy" id="galaxySaveGuide" aria-hidden="true">
+            <span class="save-guide-platform">GALAXY</span>
+            <h4>갤럭시에서 저장</h4>
+            <ol>
+                <li>카메라 앱으로 QR 코드를 비추고 표시되는 링크를 누르세요.</li>
+                <li>브라우저에서 다운로드를 허용하고 완료될 때까지 기다리세요.</li>
+                <li><strong>갤러리 → 다운로드</strong> 앨범에서 사진을 확인하세요.</li>
+            </ol>
+        </aside>
+
+        <div id="qrModalContent">
+            <h3 id="qrModalTitle">휴대폰으로 다운로드</h3>
+            <p class="qr-subtitle">QR 코드를 스캔하세요</p>
+
+            <div class="qr-wrapper">
+                <img id="qr_image" src="" alt="QR Code">
+            </div>
+
+            <button class="btn btn-secondary" id="saveGuideToggle" type="button" aria-expanded="false" aria-controls="galaxySaveGuide iphoneSaveGuide" onclick="toggleSaveGuides()">
+                사진 저장 방법
+            </button>
+            <button class="btn btn-secondary" id="closeModal" type="button" onclick="closeQRModal()">닫기</button>
         </div>
 
-        <button class="btn btn-secondary" id="closeModal" onclick="closeQRModal()">닫기</button>
+        <aside class="save-guide save-guide-iphone" id="iphoneSaveGuide" aria-hidden="true">
+            <span class="save-guide-platform">iPHONE</span>
+            <h4>아이폰에서 저장</h4>
+            <ol>
+                <li>카메라 앱으로 QR 코드를 비추고 상단에 표시되는 링크를 누르세요.</li>
+                <li><strong>“photo_{{ folder }}.png”을 다운로드하겠습니까?</strong> 안내에서 <strong>보기</strong>를 누르세요.</li>
+                <li>표시된 사진을 길게 누른 뒤 <strong>사진 앱에 저장</strong>을 눌러 갤러리에 저장하세요.</li>
+            </ol>
+        </aside>
     </div>
 </div>
 
@@ -595,6 +785,7 @@ function openQRModal() {
     const qrImg = document.getElementById("qr_image");
     const folder = "{{ folder }}";
 
+    setSaveGuidesVisible(false);
     modal.style.display = "flex";
 
     function tryLoad() {
@@ -612,8 +803,25 @@ function openQRModal() {
     tryLoad();
 }
 
+function setSaveGuidesVisible(visible) {
+    const modal = document.getElementById("qrModal");
+    const toggle = document.getElementById("saveGuideToggle");
+    const guides = modal.querySelectorAll(".save-guide");
+
+    modal.classList.toggle("show-save-guides", visible);
+    toggle.setAttribute("aria-expanded", String(visible));
+    guides.forEach(guide => guide.setAttribute("aria-hidden", String(!visible)));
+}
+
+function toggleSaveGuides() {
+    const toggle = document.getElementById("saveGuideToggle");
+    setSaveGuidesVisible(toggle.getAttribute("aria-expanded") !== "true");
+}
+
 function closeQRModal() {
-    document.getElementById("qrModal").style.display = "none";
+    const modal = document.getElementById("qrModal");
+    setSaveGuidesVisible(false);
+    modal.style.display = "none";
 }
 </script>
 
