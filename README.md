@@ -15,9 +15,10 @@
 SnapPocket is a web-based AI photobooth system that automates the entire experience—from camera capture and AI style transformation to QR-based photo delivery.
 
 - AI style transformation powered by Stable Diffusion and `img2img`
-- Instant photo downloads through QR codes
+- Optional branded photo frames with live color previews and ten presets
+- Instant attachment downloads through the result page or QR codes
 - Real-time monitoring of captured and generated images from the admin page
-- Local-network operation with optional public access through Cloudflare Tunnel
+- Local-network operation with automated public access through a Cloudflare Quick Tunnel
 - Designed for festivals, weddings, brand activations, arcades, and other events
 
 ---
@@ -28,9 +29,10 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 | --- | --- |
 | Browser-based camera UI | Captures photos through a streamlined web interface |
 | AI image transformation | Applies configured styles through Stable Diffusion WebUI and `img2img` |
-| QR-code delivery | Generates mobile-friendly download links for processed photos |
-| Admin dashboard | Lists original and generated images in real time |
-| LAN and public access | Supports trusted local networks and optional Cloudflare Tunnel URLs |
+| Photo framing | Adds an optional `SNAP POCKET` frame with five solid and five two-tone color presets |
+| Direct and QR delivery | Serves the finished PNG as an attachment from the result page or a scanned QR code |
+| Admin dashboard | Lists original and generated images in real time and opens either image in a larger viewer |
+| LAN and public access | Supports trusted local networks and automatically manages a temporary Cloudflare Quick Tunnel URL |
 | Folder monitoring | Detects newly generated images in real time with Watchdog |
 | Parallel processing support | Uses Memurai, a Redis-compatible service for Windows, to support concurrent jobs |
 
@@ -84,7 +86,7 @@ GPU performance directly affects image-generation time.
 ## Project Structure
 
 ```text
-main/
+snap-pocket/
 ├── app.py                 # Flask backend server
 ├── checkpoints.json       # AI model and style configuration
 ├── templates/
@@ -92,14 +94,16 @@ main/
 │   ├── download.html      # Photo download page
 │   └── admin.html         # Admin dashboard
 ├── static/
+│   ├── fonts/             # Local UI font and its OFL license
 │   ├── preview/           # Temporary AI-generated previews
 │   └── qr/                # Generated QR codes
 ├── usage/                 # Example photos of GUI
 ├── public/                # Final user-accessible images
 ├── temp/                  # Raw captured images
 ├── run.bat                # Automated startup script
+├── start_tunnel.ps1       # Quick Tunnel URL discovery and cleanup
 ├── requirements.txt       # Python dependencies
-└── tunnel_url.txt         # Current Cloudflare Tunnel URL
+└── tunnel_url.txt         # Runtime-only Cloudflare Quick Tunnel URL
 ```
 ---
 
@@ -171,7 +175,7 @@ Download the repository as a ZIP file or clone it with Git:
 
 ```bash
 git clone https://github.com/movenb3at/snap-pocket.git
-cd snap-pocket/main
+cd snap-pocket
 ```
 
 ### 7. Install Python dependencies
@@ -195,7 +199,9 @@ Run:
 run.bat
 ```
 
-The script opens three Command Prompt windows for the required services. Keep all three windows open while SnapPocket is running.
+The script starts the Celery worker, Flask server, and Cloudflare tunnel. Keep the launcher and service consoles open while SnapPocket is running.
+
+`run.bat` also calls `start_tunnel.ps1`, so `cloudflared` must be installed and available on `PATH`. The helper waits for the Quick Tunnel URL instead of relying on a fixed delay.
 
 The local application is available at:
 
@@ -203,11 +209,11 @@ The local application is available at:
 http://127.0.0.1:5000/main_page
 ```
 
-### 10. Update the Cloudflare Tunnel URL
+### 10. Use the automatically managed Cloudflare Tunnel URL
 
-Copy the Cloudflare URL displayed in the first Command Prompt window, paste it into `tunnel_url.txt`, and save the file.
+No manual copy-and-paste step is required. `start_tunnel.ps1` removes any stale address, starts a Quick Tunnel for `http://localhost:5000`, waits up to 30 seconds for a `trycloudflare.com` URL, and saves it to `tunnel_url.txt` in the UTF-16 format expected by `app.py`.
 
-The temporary `trycloudflare.com` address changes each time the services restart, so `tunnel_url.txt` must be updated after every launch.
+The temporary address changes each time the services restart. Keep the tunnel console open while SnapPocket is running. When the tunnel stops, the helper removes `tunnel_url.txt` so the application cannot reuse an expired address.
 
 To open the public camera page, append `/main_page` to the generated address:
 
@@ -274,15 +280,17 @@ Only add origins that you control and trust. Use HTTPS for public access.
 
 1. Open the camera page and allow camera access.
 2. Capture a photo.
-3. Choose a style and wait for the AI transformation to finish.
-4. Scan the generated QR code.
-5. Download the result to a mobile device.
+3. Choose a style and optionally enable a photo frame and color preset.
+4. Wait for the AI transformation and frame composition to finish.
+5. Download the PNG directly or scan the generated QR code to receive the attachment on a mobile device.
+6. Use **Back to Start** to return to the host PC's LAN camera URL.
 
 ### Admin Flow
 
 1. Open `/admin` on the host, LAN, or public base URL.
 2. Review the latest images, which are listed automatically.
-3. Compare original captures with generated results.
+3. Select an original or generated thumbnail to inspect it in the full-image viewer.
+4. Compare original captures with generated results.
 
 If the repository is still using a default admin password, change it before exposing the service publicly.
 
@@ -315,6 +323,7 @@ If the repository is still using a default admin password, change it before expo
 - [2026-05-18] Password protection added to `admin.html`
 - [2026-06-10] The **Back to Start** button in `download.html` changed from `history.back()` to `LAN_URL`
 - [2026-07-28] Completely changed the design of HTML files.
+- [2026-08-04] Added configurable photo frames, direct QR downloads, full-image admin previews, local UI fonts, and automatic Cloudflare Quick Tunnel URL management.
 
 ---
 
