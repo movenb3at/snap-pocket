@@ -6,7 +6,7 @@ import qrcode
 import requests
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import shutil
 import socket
 import cv2
@@ -64,7 +64,7 @@ for d in [TEMP_DIR, PUBLIC_DIR, PREVIEW_DIR, QR_DIR]:
 # 메인 페이지
 @app.route("/main_page")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", watermark_text=WATERMARK_TEXT)
 
 # 관리자 페이지 데이터
 @app.route("/admin_data")
@@ -106,6 +106,180 @@ logger.info(f"LAN URL: {LAN_URL}")
 
 # SD AUTOMATIC1111 API URL
 SD_URL = "http://127.0.0.1:7860/sdapi/v1/img2img"
+
+WATERMARK_TEXT = "SNAP POCKET"
+DEFAULT_FRAME_COLOR = "clear_white"
+FRAME_COLOR_PRESETS = {
+    "clear_white": {
+        "colors": ((255, 255, 255, 255),),
+        "watermark": (40, 40, 40, 255)
+    },
+    "matte_black": {
+        "colors": ((18, 18, 21, 255),),
+        "watermark": (245, 245, 245, 255)
+    },
+    "cybernetic_blue": {
+        "colors": ((0, 199, 217, 255),),
+        "watermark": (4, 42, 50, 255)
+    },
+    "metal_purple": {
+        "colors": ((101, 76, 159, 255),),
+        "watermark": (255, 255, 255, 255)
+    },
+    "liquid_glass": {
+        "colors": ((218, 235, 242, 190),),
+        "watermark": (34, 50, 58, 235)
+    },
+    "black_white": {
+        "colors": ((18, 18, 21, 255), (248, 247, 244, 255)),
+        "watermark": (40, 40, 40, 255)
+    },
+    "cobalt_cream": {
+        "colors": ((31, 74, 194, 255), (246, 235, 208, 255)),
+        "watermark": (34, 38, 48, 255)
+    },
+    "burgundy_blush": {
+        "colors": ((101, 27, 53, 255), (242, 205, 211, 255)),
+        "watermark": (74, 23, 40, 255)
+    },
+    "forest_sand": {
+        "colors": ((24, 74, 58, 255), (221, 199, 158, 255)),
+        "watermark": (34, 47, 40, 255)
+    },
+    "orange_navy": {
+        "colors": ((241, 105, 44, 255), (23, 35, 64, 255)),
+        "watermark": (255, 255, 255, 255)
+    }
+}
+
+
+def _load_watermark_font(font_size):
+    font_candidates = [
+        os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts", "arialbd.ttf"),
+        "DejaVuSans-Bold.ttf",
+        "arial.ttf"
+    ]
+    for font_path in font_candidates:
+        try:
+            return ImageFont.truetype(font_path, font_size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def _create_frame_canvas(size, frame_color):
+    preset = (
+        FRAME_COLOR_PRESETS.get(frame_color)
+        if isinstance(frame_color, str)
+        else None
+    ) or FRAME_COLOR_PRESETS[DEFAULT_FRAME_COLOR]
+    colors = preset["colors"]
+    canvas = Image.new("RGBA", size, colors[0])
+
+    if len(colors) == 2:
+        ImageDraw.Draw(canvas).polygon(
+            ((0, size[1]), (size[0], 0), (size[0], size[1])),
+            fill=colors[1]
+        )
+
+    return canvas, preset["watermark"]
+
+
+def create_framed_photo(image_path, output_path, frame_color=DEFAULT_FRAME_COLOR):
+    with Image.open(image_path) as image_source:
+        image = image_source.convert("RGB")
+
+    border_size = max(20, round(image.width * 0.02))
+    font_size = max(18, round(image.width * 0.028))
+    font = _load_watermark_font(font_size)
+
+    measurement_canvas = Image.new("RGB", (1, 1), "white")
+    measurement_draw = ImageDraw.Draw(measurement_canvas)
+    text_box = measurement_draw.textbbox((0, 0), WATERMARK_TEXT, font=font)
+    text_width = text_box[2] - text_box[0]
+    text_height = text_box[3] - text_box[1]
+    watermark_border = text_height + border_size * 2
+
+    canvas_width = image.width + border_size * 2
+    canvas_height = border_size + image.height + watermark_border
+    framed_photo, watermark_fill = _create_frame_canvas(
+        (canvas_width, canvas_height),
+        frame_color
+    )
+    framed_photo.paste(image, (border_size, border_size))
+
+    watermark_x = canvas_width - border_size - text_width - text_box[0]
+    watermark_y = (
+        border_size
+        + image.height
+        + (watermark_border - text_height) // 2
+        - text_box[1]
+    )
+    ImageDraw.Draw(framed_photo).text(
+        (watermark_x, watermark_y),
+        WATERMARK_TEXT,
+        fill=watermark_fill,
+        font=font
+    )
+    framed_photo.save(output_path, format="PNG")
+
+
+def create_framed_collage(
+    raw_path,
+    transformed_path,
+    output_path,
+    frame_color=DEFAULT_FRAME_COLOR
+):
+    with Image.open(raw_path) as raw_source:
+        raw_image = raw_source.convert("RGB")
+    with Image.open(transformed_path) as transformed_source:
+        transformed_image = transformed_source.convert("RGB")
+
+    content_width = max(raw_image.width, transformed_image.width)
+    border_size = max(20, round(content_width * 0.02))
+    font_size = max(18, round(content_width * 0.028))
+    font = _load_watermark_font(font_size)
+
+    measurement_canvas = Image.new("RGB", (1, 1), "white")
+    measurement_draw = ImageDraw.Draw(measurement_canvas)
+    text_box = measurement_draw.textbbox((0, 0), WATERMARK_TEXT, font=font)
+    text_width = text_box[2] - text_box[0]
+    text_height = text_box[3] - text_box[1]
+    watermark_border = text_height + border_size * 2
+
+    canvas_width = content_width + border_size * 2
+    canvas_height = (
+        border_size
+        + raw_image.height
+        + border_size
+        + transformed_image.height
+        + watermark_border
+    )
+    raw_x = border_size + (content_width - raw_image.width) // 2
+    transformed_x = border_size + (content_width - transformed_image.width) // 2
+    raw_y = border_size
+    transformed_y = raw_y + raw_image.height + border_size
+    collage, watermark_fill = _create_frame_canvas(
+        (canvas_width, canvas_height),
+        frame_color
+    )
+    collage.paste(raw_image, (raw_x, raw_y))
+    collage.paste(transformed_image, (transformed_x, transformed_y))
+
+    watermark_x = canvas_width - border_size - text_width - text_box[0]
+    watermark_y = (
+        transformed_y
+        + transformed_image.height
+        + (watermark_border - text_height) // 2
+        - text_box[1]
+    )
+    ImageDraw.Draw(collage).text(
+        (watermark_x, watermark_y),
+        WATERMARK_TEXT,
+        fill=watermark_fill,
+        font=font
+    )
+    collage.save(output_path, format="PNG")
 
 # 사진 업로드 (임시 저장)
 @app.route("/upload_temp", methods=["POST"])
@@ -291,6 +465,14 @@ def task_status(task_id):
 def finalize():
     data = request.json
     session_id = data["session_id"]
+    add_frame = data.get("add_frame") is True
+    style_key = data.get("style")
+    frame_color = data.get("frame_color", DEFAULT_FRAME_COLOR)
+    if add_frame and (
+        not isinstance(frame_color, str)
+        or frame_color not in FRAME_COLOR_PRESETS
+    ):
+        return jsonify({"error": "지원하지 않는 프레임 색상입니다."}), 400
 
     tunnel_file = os.path.join(BASE_DIR, "tunnel_url.txt")
     if os.path.exists(tunnel_file):
@@ -305,15 +487,29 @@ def finalize():
 
     preview_path = os.path.join(PREVIEW_DIR, f"{session_id}.png")
     final_path = os.path.join(public_folder, "result.png")
-    os.rename(preview_path, final_path)
-
     raw_src_path = os.path.join(TEMP_DIR, session_id, "raw.png")
+    if add_frame:
+        if style_key == "none":
+            create_framed_photo(preview_path, final_path, frame_color)
+        else:
+            create_framed_collage(
+                raw_src_path,
+                preview_path,
+                final_path,
+                frame_color
+            )
+        os.remove(preview_path)
+    else:
+        os.rename(preview_path, final_path)
+
     raw_dst_path = os.path.join(public_folder, "raw.png")   
     shutil.copy(raw_src_path, raw_dst_path)
     
-    download_url = f"{tunnel_url}/dl/{hash_value}/"
+    base_url = tunnel_url.rstrip("/")
+    download_page_url = f"{base_url}/dl/{hash_value}/"
+    direct_download_url = f"{base_url}/download/{hash_value}/"
 
-    qr_img = qrcode.make(download_url)
+    qr_img = qrcode.make(direct_download_url)
     qr_path = os.path.join(QR_DIR, f"{hash_value}.png")
     qr_img.save(qr_path)
 
@@ -321,7 +517,8 @@ def finalize():
         qr_b64 = base64.b64encode(f.read()).decode()
 
     return jsonify({
-        "download_url": download_url,
+        "download_url": download_page_url,
+        "direct_download_url": direct_download_url,
         "qrcode_b64": "data:image/png;base64," + qr_b64
     })
 
@@ -329,6 +526,15 @@ def finalize():
 @app.route("/dl/<folder>/")
 def download_page(folder):
     return render_template("download.html", folder=folder, lan_url=LAN_URL)
+
+@app.route("/download/<folder>/")
+def download_image(folder):
+    return send_from_directory(
+        os.path.join(PUBLIC_DIR, folder),
+        "result.png",
+        as_attachment=True,
+        download_name=f"photo_{folder}.png"
+    )
 
 @app.route("/public/<folder>/<filename>")
 def serve_image(folder, filename):

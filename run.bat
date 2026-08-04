@@ -1,5 +1,6 @@
 @echo off
 title SnapPocket Web Server
+cd /d "%~dp0"
 
 echo Running nvidia-smi...
 nvidia-smi
@@ -20,4 +21,9 @@ start "Flask Server" cmd /k "python app.py"
 timeout /t 3 >nul
 
 echo Starting Cloudflare Tunnel...
-cloudflared tunnel --url http://localhost:5000/main_page
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_tunnel.ps1"
+if errorlevel 1 (
+    echo Failed to start the Cloudflare Tunnel.
+    pause
+    exit /b 1
+)

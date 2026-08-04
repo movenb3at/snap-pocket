@@ -584,8 +584,7 @@
 function downloadImage() {
     const folder = "{{ folder }}";
     const link = document.createElement('a');
-    link.href = `/public/${folder}/result.png`;
-    link.download = `photo_${folder}.png`;
+    link.href = `/download/${folder}/`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

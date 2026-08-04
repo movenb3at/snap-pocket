@@ -469,6 +469,123 @@
             object-fit: cover;
         }
 
+        .image-open-button {
+            display: block;
+            width: 100%;
+            padding: 0;
+            color: inherit;
+            font: inherit;
+            text-align: left;
+            appearance: none;
+            cursor: zoom-in;
+        }
+
+        .image-open-button:focus-visible {
+            outline: 3px solid rgba(255, 107, 69, 0.72);
+            outline-offset: 3px;
+        }
+
+        body.image-modal-open {
+            overflow: hidden;
+        }
+
+        .image-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(5, 4, 7, 0.88);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition:
+                opacity 0.22s ease,
+                visibility 0s linear 0.22s;
+        }
+
+        .image-modal.is-visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transition-delay: 0s;
+        }
+
+        .image-modal-dialog {
+            display: flex;
+            flex-direction: column;
+            width: min(96vw, 1600px);
+            height: min(94vh, 1200px);
+            min-height: 0;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.13);
+            border-radius: 22px;
+            background: #0d0b10;
+            box-shadow: 0 36px 100px rgba(0, 0, 0, 0.56);
+            transform: translateY(18px) scale(0.98);
+            transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .image-modal.is-visible .image-modal-dialog {
+            transform: translateY(0) scale(1);
+        }
+
+        .image-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+        }
+
+        .image-modal-title {
+            overflow: hidden;
+            font-size: 14px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .image-modal-close {
+            flex: none;
+            width: 38px;
+            height: 38px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.07);
+            color: #fffaf4;
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .image-modal-close:hover {
+            background: rgba(255, 255, 255, 0.13);
+        }
+
+        .image-modal-stage {
+            display: flex;
+            flex: 1;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+            padding: 16px;
+            overflow: hidden;
+        }
+
+        .image-modal-stage img {
+            display: block;
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
         .img-title {
             top: 10px;
             left: 10px;
@@ -515,6 +632,20 @@
             .login-box {
                 padding: 30px 22px;
             }
+
+            .image-modal {
+                padding: 10px;
+            }
+
+            .image-modal-dialog {
+                width: 100%;
+                height: 96vh;
+                border-radius: 16px;
+            }
+
+            .image-modal-stage {
+                padding: 8px;
+            }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -522,6 +653,7 @@
                 scroll-behavior: auto !important;
                 animation-duration: 0.01ms !important;
                 animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
             }
         }
     </style>
@@ -551,6 +683,18 @@
         </header>
 
         <div id="content"></div>
+    </div>
+
+    <div id="image-modal" class="image-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="image-modal-title">
+        <div class="image-modal-dialog">
+            <div class="image-modal-header">
+                <strong id="image-modal-title" class="image-modal-title">이미지 전체 보기</strong>
+                <button id="image-modal-close" class="image-modal-close" type="button" aria-label="이미지 전체 보기 닫기">&times;</button>
+            </div>
+            <div class="image-modal-stage">
+                <img id="image-modal-preview" src="" alt="">
+            </div>
+        </div>
     </div>
 
     <script>
@@ -587,6 +731,50 @@
 
         let oldItems = [];
 
+        const imageModal = document.getElementById('image-modal');
+        const imageModalPreview = document.getElementById('image-modal-preview');
+        const imageModalTitle = document.getElementById('image-modal-title');
+        const imageModalClose = document.getElementById('image-modal-close');
+        let lastImageTrigger = null;
+
+        function openImageModal(trigger) {
+            const imageSrc = trigger.dataset.imageSrc;
+            const imageLabel = trigger.dataset.imageLabel;
+            if (!imageSrc) return;
+
+            lastImageTrigger = trigger;
+            imageModalPreview.src = imageSrc;
+            imageModalPreview.alt = `${imageLabel} 전체 이미지`;
+            imageModalTitle.textContent = `${imageLabel} · 전체 이미지`;
+            imageModal.classList.add('is-visible');
+            imageModal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('image-modal-open');
+            imageModalClose.focus();
+        }
+
+        function closeImageModal() {
+            imageModal.classList.remove('is-visible');
+            imageModal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('image-modal-open');
+            imageModalPreview.removeAttribute('src');
+            if (lastImageTrigger?.isConnected) lastImageTrigger.focus();
+        }
+
+        document.getElementById('content').addEventListener('click', function(e) {
+            const trigger = e.target.closest('.image-open-button');
+            if (trigger && this.contains(trigger)) openImageModal(trigger);
+        });
+
+        imageModalClose.addEventListener('click', closeImageModal);
+        imageModal.addEventListener('click', function(e) {
+            if (e.target === imageModal) closeImageModal();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && imageModal.classList.contains('is-visible')) {
+                closeImageModal();
+            }
+        });
+
         function createItemHTML(item) {
             return `
                 <div class="item" id="item-${item.folder}">
@@ -599,14 +787,14 @@
                     </div>
 
                     <div class="row">
-                        <div class="img-box">
+                        <button class="img-box image-open-button" type="button" data-image-src="/public/${item.folder}/raw.png?cache=${item.timestamp}" data-image-label="RAW">
                             <div class="img-title">RAW</div>
                             <img src="/public/${item.folder}/raw.png?cache=${item.timestamp}" alt="RAW">
-                        </div>
-                        <div class="img-box">
+                        </button>
+                        <button class="img-box image-open-button" type="button" data-image-src="/public/${item.folder}/result.png?cache=${item.timestamp}" data-image-label="Result">
                             <div class="img-title">Result</div>
                             <img src="/public/${item.folder}/result.png?cache=${item.timestamp}" alt="Result">
-                        </div>
+                        </button>
                     </div>
                 </div>
             `;
