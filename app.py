@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory, render_template, session, abort
 from celery import Celery
 import os, uuid, hashlib, json, base64, time
 from datetime import datetime
+from functools import wraps
 import qrcode
 import requests
 from watchdog.observers import Observer
@@ -13,6 +14,7 @@ import cv2
 import numpy as np
 import copy
 import logging
+import secrets
 
 # 로깅 설정
 class ColorFormatter(logging.Formatter):
@@ -27,7 +29,7 @@ class ColorFormatter(logging.Formatter):
 
     def format(self, record):
         log_color = self.COLORS.get(record.levelno, self.RESET)
-        format_str = f"{log_color}[%(asctime)s][%(levelname)s|%(filename)s:%(lineno)s] --- %(message)s{self.RESET}"
+        format_str = f"[%(asctime)s][{log_color}%(levelname)s{self.RESET}|%(filename)s:%(lineno)s] --- %(message)s"
         formatter = logging.Formatter(format_str)
         return formatter.format(record)
 
@@ -42,9 +44,22 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+ADMIN_PASSWORD = os.environ.get("SNAP_POCKET_ADMIN_PASSWORD")
+ADMIN_PASSWORD_WAS_GENERATED = not ADMIN_PASSWORD
+if ADMIN_PASSWORD_WAS_GENERATED:
+    ADMIN_PASSWORD = secrets.token_urlsafe(12)
+ADMIN_PASSWORD_DIGEST = hashlib.sha256(ADMIN_PASSWORD.encode("utf-8")).digest()
+
+app.config.update(
+    SECRET_KEY=os.environ.get("SNAP_POCKET_SECRET_KEY") or secrets.token_hex(32),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Strict"
+)
+
 # Celery 설정
 app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
 app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
+app.config['CELERY_TRACK_STARTED'] = True
 
 celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
 celery.conf.update(app.config)
@@ -61,15 +76,46 @@ QR_DIR = os.path.join(BASE_DIR, "static/qr")
 for d in [TEMP_DIR, PUBLIC_DIR, PREVIEW_DIR, QR_DIR]:
     os.makedirs(d, exist_ok=True)
 
+
+def is_admin_authenticated():
+    return session.get("admin_authenticated") is True
+
+
+def admin_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not is_admin_authenticated():
+            return jsonify({"error": "관리자 로그인이 필요합니다."}), 401
+        return view(*args, **kwargs)
+    return wrapped
+
 # 메인 페이지
 @app.route("/main_page")
 def index():
     return render_template("index.html", watermark_text=WATERMARK_TEXT)
 
+# 관리자 로그인
+@app.route("/admin_login", methods=["POST"])
+def admin_login():
+    data = request.get_json(silent=True) or {}
+    password = data.get("password")
+    if not isinstance(password, str) or not password:
+        return jsonify({"error": "비밀번호를 입력해주세요."}), 400
+
+    password_digest = hashlib.sha256(password.encode("utf-8")).digest()
+    if not secrets.compare_digest(password_digest, ADMIN_PASSWORD_DIGEST):
+        return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 401
+
+    session.clear()
+    session["admin_authenticated"] = True
+    return jsonify({"ok": True})
+
+
 # 관리자 페이지 데이터
 @app.route("/admin_data")
+@admin_required
 def admin_data():
-    base = os.path.join(os.getcwd(), "public")
+    base = PUBLIC_DIR
     items = []
     for folder in os.listdir(base):
         path = os.path.join(base, folder)
@@ -106,6 +152,7 @@ logger.info(f"LAN URL: {LAN_URL}")
 
 # SD AUTOMATIC1111 API URL
 SD_URL = "http://127.0.0.1:7860/sdapi/v1/img2img"
+SD_TIMEOUT_SECONDS = 10 * 60
 
 WATERMARK_TEXT = "SNAP POCKET"
 DEFAULT_FRAME_COLOR = "clear_white"
@@ -310,11 +357,17 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
             STYLE_CONFIG = json.load(f)["checkpoints"]
 
     except Exception as e:
-        logger.error(f"checkpoints.json load failed: {e}")
+        logger.exception(f"checkpoints.json load failed: {e}")
+        raise RuntimeError("스타일 설정을 불러오지 못했습니다.") from e
     
     else:
         logger.info("checkpoints.json loaded successfully.")
-        
+
+        if style_key not in STYLE_CONFIG:
+            raise ValueError(f"Unsupported style: {style_key}")
+        if not isinstance(overrides, dict):
+            raise ValueError("Style overrides must be an object.")
+
         cfg = copy.deepcopy(STYLE_CONFIG.get(style_key, {}))
         cfg.update(overrides)
 
@@ -342,7 +395,8 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
             logger.info(f"Applied Gender/Group Prompts for: {gender}, with style: {style_key}")
 
         raw_path = os.path.join(TEMP_DIR, session_id, "raw.png")
-        img = Image.open(raw_path)
+        with Image.open(raw_path) as image_source:
+            img = image_source.convert("RGB")
         orig_w, orig_h = img.size
 
         with open(raw_path, "rb") as f:
@@ -367,7 +421,7 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
                 result_b64 = base64.b64encode(buffer).decode()
 
             elif style_key == "face_filter": # 얼굴 필터
-                pass # 얼굴 필터 로직 추가 (추후 구현 예정)
+                raise NotImplementedError("얼굴 필터는 아직 지원되지 않습니다.")
 
             elif style_key == "canny_filter": # canny 필터
                 img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
@@ -420,13 +474,23 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
             }
             
             try:
-                r = requests.post(SD_URL, json=payload, timeout=None)
+                r = requests.post(SD_URL, json=payload, timeout=SD_TIMEOUT_SECONDS)
                 r.raise_for_status() 
-                result_b64 = r.json()["images"][0]
-                
+                response_data = r.json()
+                images = response_data.get("images")
+                if not isinstance(images, list) or not images:
+                    raise ValueError("Stable Diffusion response did not contain an image.")
+                result_b64 = images[0]
+
+            except requests.Timeout as e:
+                logger.error(f"Stable Diffusion API timed out after {SD_TIMEOUT_SECONDS} seconds: {e}")
+                raise RuntimeError("AI 변환 시간이 10분을 초과했습니다.") from e
             except Exception as e:
-                logger.error(f"Stable Diffusion API Request failed: {e}")
-                result_b64 = init_b64
+                logger.exception(f"Stable Diffusion API request failed: {e}")
+                raise RuntimeError("AI 변환 요청에 실패했습니다.") from e
+
+        if not result_b64:
+            raise RuntimeError("변환 결과 이미지가 생성되지 않았습니다.")
 
         preview_path = os.path.join(PREVIEW_DIR, f"{session_id}.png")
         with open(preview_path, "wb") as f:
@@ -438,13 +502,20 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
 # 변환 시작
 @app.route("/transform", methods=["POST"])
 def transform():
-    data = request.json
-    session_id = data["session_id"]
-    style_key = data["style"]
+    data = request.get_json(silent=True) or {}
+    session_id = data.get("session_id")
+    style_key = data.get("style")
     gender = data.get("gender") 
     overrides = data.get("overrides", {})
 
-    task = process_transform_task.apply_async(args=[session_id, style_key, gender, overrides])
+    if not session_id or not style_key:
+        return jsonify({"error": "변환 요청 정보가 올바르지 않습니다."}), 400
+
+    try:
+        task = process_transform_task.apply_async(args=[session_id, style_key, gender, overrides])
+    except Exception as e:
+        logger.exception(f"Failed to enqueue transform task: {e}")
+        return jsonify({"error": "변환 작업을 시작하지 못했습니다."}), 503
     
     return jsonify({"task_id": task.id}), 202
 
@@ -453,74 +524,88 @@ def transform():
 def task_status(task_id):
     task = process_transform_task.AsyncResult(task_id)
     if task.state == 'PENDING':
-        response = {"state": task.state, "status": "대기 및 변환 중..."}
+        response = {"state": task.state, "status": "변환 대기 중..."}
+    elif task.state == 'STARTED':
+        response = {"state": task.state, "status": "AI 변환 중..."}
+    elif task.state == 'RETRY':
+        response = {"state": task.state, "status": "AI 변환 재시도 중..."}
     elif task.state == 'SUCCESS':
         response = {"state": task.state, "preview_image": task.result}
     else:
-        response = {"state": task.state, "status": "오류 발생"}
+        response = {"state": task.state, "status": "AI 변환에 실패했습니다. 다시 시도해주세요."}
     return jsonify(response)
 
 # URL 생성 + QR 생성
 @app.route("/finalize", methods=["POST"])
 def finalize():
-    data = request.json
-    session_id = data["session_id"]
+    data = request.get_json(silent=True) or {}
+    session_id = data.get("session_id")
     add_frame = data.get("add_frame") is True
     style_key = data.get("style")
     frame_color = data.get("frame_color", DEFAULT_FRAME_COLOR)
+    if not session_id:
+        return jsonify({"error": "저장할 촬영 세션이 없습니다."}), 400
     if add_frame and (
         not isinstance(frame_color, str)
         or frame_color not in FRAME_COLOR_PRESETS
     ):
         return jsonify({"error": "지원하지 않는 프레임 색상입니다."}), 400
 
-    tunnel_file = os.path.join(BASE_DIR, "tunnel_url.txt")
-    if os.path.exists(tunnel_file):
-        with open(tunnel_file, "r", encoding='utf-16') as f:
-            tunnel_url = f.read().strip()
-    else:
-        tunnel_url = "http://localhost:5000"
-
-    hash_value = hashlib.sha256(session_id.encode()).hexdigest()[:16]
-    public_folder = os.path.join(PUBLIC_DIR, hash_value)
-    os.makedirs(public_folder, exist_ok=True)
-
     preview_path = os.path.join(PREVIEW_DIR, f"{session_id}.png")
-    final_path = os.path.join(public_folder, "result.png")
     raw_src_path = os.path.join(TEMP_DIR, session_id, "raw.png")
-    if add_frame:
-        if style_key == "none":
-            create_framed_photo(preview_path, final_path, frame_color)
+    if not os.path.isfile(preview_path) or not os.path.isfile(raw_src_path):
+        logger.warning(f"Finalize source files are missing for session {session_id}")
+        return jsonify({"error": "변환 결과를 찾을 수 없습니다. 다시 촬영해주세요."}), 409
+
+    try:
+        tunnel_file = os.path.join(BASE_DIR, "tunnel_url.txt")
+        if os.path.exists(tunnel_file):
+            with open(tunnel_file, "r", encoding='utf-16') as f:
+                tunnel_url = f.read().strip()
         else:
-            create_framed_collage(
-                raw_src_path,
-                preview_path,
-                final_path,
-                frame_color
-            )
-        os.remove(preview_path)
-    else:
-        os.rename(preview_path, final_path)
+            tunnel_url = "http://localhost:5000"
 
-    raw_dst_path = os.path.join(public_folder, "raw.png")   
-    shutil.copy(raw_src_path, raw_dst_path)
-    
-    base_url = tunnel_url.rstrip("/")
-    download_page_url = f"{base_url}/dl/{hash_value}/"
-    direct_download_url = f"{base_url}/download/{hash_value}/"
+        hash_value = hashlib.sha256(session_id.encode()).hexdigest()[:16]
+        public_folder = os.path.join(PUBLIC_DIR, hash_value)
+        os.makedirs(public_folder, exist_ok=True)
 
-    qr_img = qrcode.make(direct_download_url)
-    qr_path = os.path.join(QR_DIR, f"{hash_value}.png")
-    qr_img.save(qr_path)
+        final_path = os.path.join(public_folder, "result.png")
+        if add_frame:
+            if style_key == "none":
+                create_framed_photo(preview_path, final_path, frame_color)
+            else:
+                create_framed_collage(
+                    raw_src_path,
+                    preview_path,
+                    final_path,
+                    frame_color
+                )
+            os.remove(preview_path)
+        else:
+            os.rename(preview_path, final_path)
 
-    with open(qr_path, "rb") as f:
-        qr_b64 = base64.b64encode(f.read()).decode()
+        raw_dst_path = os.path.join(public_folder, "raw.png")
+        shutil.copy(raw_src_path, raw_dst_path)
 
-    return jsonify({
-        "download_url": download_page_url,
-        "direct_download_url": direct_download_url,
-        "qrcode_b64": "data:image/png;base64," + qr_b64
-    })
+        base_url = tunnel_url.rstrip("/")
+        download_page_url = f"{base_url}/dl/{hash_value}/"
+        direct_download_url = f"{base_url}/download/{hash_value}/"
+
+        qr_img = qrcode.make(direct_download_url)
+        qr_path = os.path.join(QR_DIR, f"{hash_value}.png")
+        qr_img.save(qr_path)
+
+        with open(qr_path, "rb") as f:
+            qr_b64 = base64.b64encode(f.read()).decode()
+
+        return jsonify({
+            "download_url": download_page_url,
+            "direct_download_url": direct_download_url,
+            "qrcode_b64": "data:image/png;base64," + qr_b64
+        })
+    except Exception as e:
+        logger.exception(f"Failed to finalize session {session_id}: {e}")
+        return jsonify({"error": "결과 이미지를 저장하지 못했습니다."}), 500
 
 # 다운로드 페이지
 @app.route("/dl/<folder>/")
@@ -538,6 +623,8 @@ def download_image(folder):
 
 @app.route("/public/<folder>/<filename>")
 def serve_image(folder, filename):
+    if filename != "result.png" and not is_admin_authenticated():
+        abort(401)
     return send_from_directory(os.path.join(PUBLIC_DIR, folder), filename)
 
 # 관리자 페이지
@@ -565,5 +652,7 @@ def start_watcher():
     observer.start()
 
 if __name__ == "__main__":
+    if ADMIN_PASSWORD_WAS_GENERATED:
+        logger.warning(f"Temporary admin password: {ADMIN_PASSWORD}")
     start_watcher()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)

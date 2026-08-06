@@ -1379,6 +1379,13 @@
 <script>
 const video = document.getElementById("video");
 let capturedDataURL = "";
+let captureAttemptId = 0;
+let uploadController = null;
+let captureApproved = false;
+let uploadState = "idle";
+window.currentSession = null;
+const TRANSFORM_TIMEOUT_MS = 10 * 60 * 1000;
+const TRANSFORM_POLL_INTERVAL_MS = 1500;
 const FRAME_COLOR_PREVIEWS = Object.freeze({
     clear_white: { a: "#ffffff", b: "#ffffff", text: "#282828" },
     matte_black: { a: "#121215", b: "#121215", text: "#f5f5f5" },
@@ -1394,6 +1401,22 @@ const FRAME_COLOR_PREVIEWS = Object.freeze({
 
 function getSelectedFrameColor() {
     return document.querySelector('input[name="frameColor"]:checked')?.value || "clear_white";
+}
+
+function updateContinueButton() {
+    const button = document.getElementById("btnContinue");
+    if (uploadState === "uploading") {
+        button.disabled = true;
+        button.innerText = "이미지 업로드 중...";
+        return;
+    }
+    if (uploadState === "error") {
+        button.disabled = true;
+        button.innerText = "업로드 실패";
+        return;
+    }
+    button.innerText = "계속 진행";
+    button.disabled = !(captureApproved && uploadState === "success" && window.currentSession);
 }
 
 function updateFrameColorPreview() {
@@ -1440,8 +1463,8 @@ document.addEventListener("keydown", function(event) {
     
     if (previewModal.style.display === "flex" && event.ctrlKey && event.altKey && event.code === "KeyP") {
         event.preventDefault();
-        btnContinue.disabled = false;
-        btnContinue.innerText = "계속 진행";
+        captureApproved = true;
+        updateContinueButton();
         retakeBtn.disabled = true;
     }
 });
@@ -1492,14 +1515,48 @@ function takePhoto() {
 }
 
 function uploadImage(dataURL) {
+    captureAttemptId += 1;
+    const attemptId = captureAttemptId;
+    if (uploadController) uploadController.abort();
+
+    const controller = new AbortController();
+    uploadController = controller;
+    window.currentSession = null;
+    captureApproved = false;
+    uploadState = "uploading";
+    updateContinueButton();
+
     fetch("/upload_temp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataURL })
+        body: JSON.stringify({ image: dataURL }),
+        signal: controller.signal
     })
-    .then(res => res.json())
-    .then(data => { window.currentSession = data.session_id; })
-    .catch(err => console.error("Upload failed", err));
+    .then(async res => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "이미지 업로드에 실패했습니다.");
+        return data;
+    })
+    .then(data => {
+        if (attemptId !== captureAttemptId) return;
+        if (!data.session_id) throw new Error("촬영 세션을 만들지 못했습니다.");
+        window.currentSession = data.session_id;
+        uploadState = "success";
+        updateContinueButton();
+    })
+    .catch(error => {
+        if (error.name === "AbortError" || attemptId !== captureAttemptId) return;
+        console.error("Upload failed", error);
+        window.currentSession = null;
+        uploadState = "error";
+        captureApproved = false;
+        document.getElementById("retakeBtn").disabled = false;
+        updateContinueButton();
+        alert(error.message);
+    })
+    .finally(() => {
+        if (uploadController === controller) uploadController = null;
+    });
 }
 
 function showPreviewModal(imageSrc) {
@@ -1510,18 +1567,29 @@ function showPreviewModal(imageSrc) {
     
     imgDisplay.src = imageSrc;
     modal.style.backgroundImage = `url('${imageSrc}')`;
-    btnContinue.disabled = true;
-    btnContinue.innerText = "계속 진행";
+    updateContinueButton();
     retakeBtn.disabled = false;
     modal.style.display = "flex";
 }
 
 function retakePhoto() {
+    captureAttemptId += 1;
+    if (uploadController) uploadController.abort();
+    uploadController = null;
+    window.currentSession = null;
+    capturedDataURL = "";
+    captureApproved = false;
+    uploadState = "idle";
+    updateContinueButton();
     document.getElementById("previewModal").style.display = "none";
     document.getElementById("captureBtn").disabled = false;
 }
 
 function goToStyleSelect() {
+    if (uploadState !== "success" || !window.currentSession) {
+        alert("이미지 업로드가 완료될 때까지 기다려주세요.");
+        return;
+    }
     document.getElementById("previewModal").style.display = "none";
     document.getElementById("styleModal").style.display = "flex";
     document.getElementById("styleSelect").value = "";
@@ -1546,69 +1614,115 @@ function checkSelections() {
     else transformBtn.disabled = true;
 }
 
-function startTransform() {
+function setTransformOptionsDisabled(disabled) {
+    document.getElementById("styleSelect").disabled = disabled;
+    document.getElementById("genderSelect").disabled = disabled;
+    document.getElementById("frameCheckbox").disabled = disabled;
+    document.querySelectorAll('input[name="frameColor"]').forEach(input => {
+        input.disabled = disabled;
+    });
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function requestJson(url, options, fallbackMessage) {
+    const response = await fetch(url, options);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || fallbackMessage);
+    return data;
+}
+
+async function waitForTransform(taskId, onStateChange) {
+    let transformStartedAt = null;
+    while (true) {
+        const statusData = await requestJson(
+            `/status/${taskId}`,
+            undefined,
+            "변환 상태를 확인하지 못했습니다."
+        );
+        if (typeof onStateChange === "function") onStateChange(statusData.state);
+        if (statusData.state === "SUCCESS") return;
+        if (statusData.state === "FAILURE" || statusData.state === "REVOKED") {
+            throw new Error(statusData.status || "AI 변환에 실패했습니다.");
+        }
+        if (statusData.state === "STARTED") {
+            if (transformStartedAt === null) transformStartedAt = Date.now();
+            if (Date.now() - transformStartedAt >= TRANSFORM_TIMEOUT_MS) {
+                throw new Error("AI 변환이 시작된 후 10분 안에 완료되지 않았습니다.");
+            }
+        }
+        await sleep(TRANSFORM_POLL_INTERVAL_MS);
+    }
+}
+
+async function startTransform() {
     const btn = document.getElementById("transformBtn");
     if (!window.currentSession) {
         alert("이미지 업로드 중입니다. 잠시 후 다시 시도해주세요.");
         return;
     }
 
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> 대기표 발급 중...';
-
+    const sessionId = window.currentSession;
     const style = document.getElementById("styleSelect").value;
     const gender = document.getElementById("genderSelect").value;
     const addFrame = document.getElementById("frameCheckbox").checked;
     const frameColor = getSelectedFrameColor();
-    const payload = { session_id: window.currentSession, style: style, gender: gender };
+    const payload = { session_id: sessionId, style: style, gender: gender };
 
-    fetch("/transform", {
-        method: "POST",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify(payload)
-    })
-    .then(r => r.json())
-    .then(res => {
+    setTransformOptionsDisabled(true);
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 대기표 발급 중...';
+
+    try {
+        const res = await requestJson(
+            "/transform",
+            {
+                method: "POST",
+                headers: { "Content-Type":"application/json" },
+                body: JSON.stringify(payload)
+            },
+            "변환 작업을 시작하지 못했습니다."
+        );
         const taskId = res.task_id;
-        btn.innerHTML = '<span class="spinner"></span> 변환 중...';
-        
-        const checkInterval = setInterval(() => {
-            fetch(`/status/${taskId}`)
-            .then(r => r.json())
-            .then(statusData => {
-                if (statusData.state === 'SUCCESS') {
-                    clearInterval(checkInterval);
-                    btn.innerHTML = '완료';
-                    
-                    fetch("/finalize", {
-                        method: "POST",
-                        headers: { "Content-Type":"application/json" },
-                        body: JSON.stringify({
-                            session_id: window.currentSession,
-                            add_frame: addFrame,
-                            style: style,
-                            frame_color: frameColor
-                        })
-                    })
-                    .then(r => r.json())
-                    .then(out => {
-                        window.location.href = out.download_url;
-                    });
-                } else if (statusData.state === 'FAILURE' || statusData.state === 'REVOKED') {
-                    clearInterval(checkInterval);
-                    btn.disabled = false;
-                    btn.innerText = "다시 시도";
-                    alert("변환 중 오류가 발생했습니다.");
-                }
-            });
-        }, 1500);
-    })
-    .catch(err => {
-        console.error(err);
+        if (!taskId) throw new Error("변환 작업 번호를 받지 못했습니다.");
+        btn.innerHTML = '<span class="spinner"></span> 변환 대기 중...';
+
+        await waitForTransform(taskId, state => {
+            if (state === "STARTED") {
+                btn.innerHTML = '<span class="spinner"></span> AI 변환 중...';
+            } else if (state === "RETRY") {
+                btn.innerHTML = '<span class="spinner"></span> AI 변환 재시도 중...';
+            } else if (state === "PENDING") {
+                btn.innerHTML = '<span class="spinner"></span> 변환 대기 중...';
+            }
+        });
+        btn.innerText = "완료";
+
+        const out = await requestJson(
+            "/finalize",
+            {
+                method: "POST",
+                headers: { "Content-Type":"application/json" },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    add_frame: addFrame,
+                    style: style,
+                    frame_color: frameColor
+                })
+            },
+            "결과 이미지를 저장하지 못했습니다."
+        );
+        if (!out.download_url) throw new Error("다운로드 주소를 만들지 못했습니다.");
+        window.location.href = out.download_url;
+    } catch (error) {
+        console.error(error);
+        setTransformOptionsDisabled(false);
         btn.disabled = false;
         btn.innerText = "다시 시도";
-        alert("요청 중 오류가 발생했습니다.");
-    });
+        alert(error.message);
+    }
 }
 </script>
 

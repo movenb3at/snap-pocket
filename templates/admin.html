@@ -465,7 +465,7 @@
         }
 
         .img-box img {
-            aspect-ratio: 16 / 9;
+            aspect-ratio: 4 / 3;
             object-fit: cover;
         }
 
@@ -663,8 +663,8 @@
     <div id="login-overlay">
         <div class="login-box">
             <h2>관리자 인증</h2>
-            <input type="password" id="pwd-input" placeholder="비밀번호를 입력하세요">
-            <button id="login-btn">접속하기</button>
+            <input type="password" id="pwd-input" placeholder="비밀번호를 입력하세요" autocomplete="current-password">
+            <button id="login-btn" type="button">접속하기</button>
         </div>
     </div>
 
@@ -698,29 +698,38 @@
     </div>
 
     <script>
-        const TARGET_HASH = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918';
+        let adminRefreshTimer = null;
 
-        async function hashPassword(password) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(password);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        function showAdmin(initialItems = null) {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('app-content').style.display = 'block';
+            if (initialItems) updateDOM(initialItems);
+            else loadData();
+            if (!adminRefreshTimer) adminRefreshTimer = setInterval(loadData, 3000);
         }
 
         async function attemptLogin() {
             const input = document.getElementById('pwd-input').value;
-            const hashedInput = await hashPassword(input);
+            const button = document.getElementById('login-btn');
+            if (!input) return;
 
-            if (hashedInput === TARGET_HASH) {
-                document.getElementById('login-overlay').style.display = 'none';
-                document.getElementById('app-content').style.display = 'block';
-                
-                loadData();
-                setInterval(loadData, 3000);
-            } else {
-                alert('비밀번호가 일치하지 않습니다.');
+            button.disabled = true;
+            try {
+                const res = await fetch('/admin_login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: input })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || '관리자 로그인에 실패했습니다.');
                 document.getElementById('pwd-input').value = '';
+                showAdmin();
+            } catch (error) {
+                alert(error.message);
+                document.getElementById('pwd-input').value = '';
+                document.getElementById('pwd-input').focus();
+            } finally {
+                button.disabled = false;
             }
         }
 
@@ -862,6 +871,13 @@
         async function loadData() {
             try {
                 const res = await fetch("/admin_data");
+                if (res.status === 401) {
+                    if (adminRefreshTimer) clearInterval(adminRefreshTimer);
+                    adminRefreshTimer = null;
+                    document.getElementById('app-content').style.display = 'none';
+                    document.getElementById('login-overlay').style.display = 'flex';
+                    return;
+                }
                 if (res.ok) {
                     const items = await res.json();
                     updateDOM(items);
@@ -870,6 +886,18 @@
                 console.error("데이터를 불러오는데 실패했습니다.", e);
             }
         }
+
+        async function restoreAdminSession() {
+            try {
+                const res = await fetch('/admin_data');
+                if (!res.ok) return;
+                showAdmin(await res.json());
+            } catch (error) {
+                console.error('관리자 세션 확인에 실패했습니다.', error);
+            }
+        }
+
+        restoreAdminSession();
     </script>
 </body>
 </html>

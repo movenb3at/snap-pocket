@@ -1,6 +1,23 @@
 @echo off
+setlocal EnableExtensions EnableDelayedExpansion
 title SnapPocket Web Server
 cd /d "%~dp0"
+
+if not defined SNAP_POCKET_ADMIN_PASSWORD (
+    for /f "delims=" %%P in ('python -c "import secrets; print(secrets.token_urlsafe(12))"') do set "SNAP_POCKET_ADMIN_PASSWORD=%%P"
+    if not defined SNAP_POCKET_ADMIN_PASSWORD (
+        echo Failed to generate a temporary admin password.
+        pause
+        exit /b 1
+    )
+    echo Temporary admin password: !SNAP_POCKET_ADMIN_PASSWORD!
+) else (
+    echo Using the admin password from SNAP_POCKET_ADMIN_PASSWORD.
+)
+
+if not defined SNAP_POCKET_SECRET_KEY (
+    for /f "delims=" %%S in ('python -c "import secrets; print(secrets.token_hex(32))"') do set "SNAP_POCKET_SECRET_KEY=%%S"
+)
 
 echo Running nvidia-smi...
 nvidia-smi
