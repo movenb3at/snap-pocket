@@ -27,3 +27,5 @@ build/
 public/**/*.png
 static/**/*.png
 temp/**/*.png
+temp/**/*.json
+metadata/*.json

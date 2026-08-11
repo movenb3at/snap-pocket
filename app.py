@@ -72,9 +72,69 @@ TEMP_DIR = os.path.join(BASE_DIR, "temp")
 PUBLIC_DIR = os.path.join(BASE_DIR, "public")
 PREVIEW_DIR = os.path.join(BASE_DIR, "static/preview")
 QR_DIR = os.path.join(BASE_DIR, "static/qr")
+METADATA_DIR = os.path.join(BASE_DIR, "metadata")
 
-for d in [TEMP_DIR, PUBLIC_DIR, PREVIEW_DIR, QR_DIR]:
+for d in [TEMP_DIR, PUBLIC_DIR, PREVIEW_DIR, QR_DIR, METADATA_DIR]:
     os.makedirs(d, exist_ok=True)
+
+TRANSFORM_STATUS_FILENAME = "transform_status.json"
+TRANSFORM_STATUSES = {"captured", "processing", "success", "failed"}
+
+
+def _load_json_object(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _write_json_object(path, data):
+    directory = os.path.dirname(path)
+    os.makedirs(directory, exist_ok=True)
+    temp_path = os.path.join(directory, f".{uuid.uuid4().hex}.json")
+    try:
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+def _get_session_folder(session_id):
+    if not isinstance(session_id, str) or not session_id:
+        return None
+    temp_root = os.path.abspath(TEMP_DIR)
+    session_folder = os.path.abspath(os.path.join(temp_root, session_id))
+    try:
+        is_inside_temp = (
+            os.path.normcase(os.path.commonpath([temp_root, session_folder]))
+            == os.path.normcase(temp_root)
+        )
+    except ValueError:
+        return None
+    if not is_inside_temp or session_folder == temp_root:
+        return None
+    return session_folder
+
+
+def _write_transform_status(session_id, status, **details):
+    if status not in TRANSFORM_STATUSES:
+        raise ValueError(f"Unsupported transform status: {status}")
+    session_folder = _get_session_folder(session_id)
+    if session_folder is None or not os.path.isdir(session_folder):
+        raise FileNotFoundError(f"Session folder not found: {session_id}")
+    payload = {
+        "status": status,
+        "updated_at": time.time(),
+        **details
+    }
+    _write_json_object(
+        os.path.join(session_folder, TRANSFORM_STATUS_FILENAME),
+        payload
+    )
 
 
 def is_admin_authenticated():
@@ -115,20 +175,105 @@ def admin_login():
 @app.route("/admin_data")
 @admin_required
 def admin_data():
-    base = PUBLIC_DIR
     items = []
-    for folder in os.listdir(base):
-        path = os.path.join(base, folder)
-        if os.path.isdir(path):
-            timestamp = os.path.getmtime(path)
-            t = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
-            items.append({
-                "folder": folder,
-                "time": t,
-                "timestamp": timestamp
-            })
+    session_folders = []
+    session_statuses = []
+    public_folders_for_sessions = set()
+
+    for session_id in os.listdir(TEMP_DIR):
+        session_path = os.path.join(TEMP_DIR, session_id)
+        if not os.path.isdir(session_path):
+            continue
+
+        session_folders.append(session_id)
+        folder = hashlib.sha256(session_id.encode()).hexdigest()[:16]
+        public_folders_for_sessions.add(folder)
+        raw_path = os.path.join(session_path, "raw.png")
+        public_result_path = os.path.join(PUBLIC_DIR, folder, "result.png")
+        preview_path = os.path.join(PREVIEW_DIR, f"{session_id}.png")
+        result_available = (
+            os.path.isfile(public_result_path)
+            or os.path.isfile(preview_path)
+        )
+        timestamp_source = raw_path if os.path.isfile(raw_path) else session_path
+        timestamp = os.path.getmtime(timestamp_source)
+
+        status_data = _load_json_object(
+            os.path.join(session_path, TRANSFORM_STATUS_FILENAME)
+        ) or {}
+        status = status_data.get("status")
+        if status not in TRANSFORM_STATUSES:
+            status = "success" if result_available else "captured"
+        session_statuses.append(status)
+
+        metadata = _load_json_object(os.path.join(METADATA_DIR, f"{folder}.json"))
+        if metadata is None:
+            metadata = _load_json_object(os.path.join(session_path, "metadata.json"))
+
+        items.append({
+            "id": session_id,
+            "folder": folder,
+            "time": datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": timestamp,
+            "status": status,
+            "metadata": metadata,
+            "raw_url": (
+                f"/admin_session_image/{session_id}/raw"
+                if os.path.isfile(raw_path)
+                else None
+            ),
+            "result_url": (
+                f"/admin_session_image/{session_id}/result"
+                if result_available
+                else None
+            )
+        })
+
+    for folder in os.listdir(PUBLIC_DIR):
+        if folder in public_folders_for_sessions:
+            continue
+        public_path = os.path.join(PUBLIC_DIR, folder)
+        result_path = os.path.join(public_path, "result.png")
+        if not os.path.isdir(public_path) or not os.path.isfile(result_path):
+            continue
+        raw_path = os.path.join(public_path, "raw.png")
+        timestamp = os.path.getmtime(result_path)
+        items.append({
+            "id": f"legacy-{folder}",
+            "folder": folder,
+            "time": datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": timestamp,
+            "status": "success",
+            "metadata": _load_json_object(
+                os.path.join(METADATA_DIR, f"{folder}.json")
+            ),
+            "raw_url": f"/public/{folder}/raw.png" if os.path.isfile(raw_path) else None,
+            "result_url": f"/public/{folder}/result.png"
+        })
+
     items.sort(key=lambda x: x["timestamp"], reverse=True)
-    return jsonify(items)
+    success_count = session_statuses.count("success")
+    failure_count = session_statuses.count("failed")
+    untransformed_count = session_statuses.count("captured")
+    transformed_total = success_count + failure_count
+    summary_total = transformed_total + untransformed_count
+    success_rate = (
+        round(success_count / transformed_total * 100, 1)
+        if transformed_total
+        else 0.0
+    )
+    return jsonify({
+        "items": items,
+        "stats": {
+            "photo_count": len(session_folders),
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "untransformed_count": untransformed_count,
+            "transformed_total": transformed_total,
+            "summary_total": summary_total,
+            "success_rate": success_rate
+        }
+    })
 
 # 랜IP 자동 감지
 def get_lan_ip():
@@ -343,11 +488,12 @@ def upload_temp():
     with open(img_path, "wb") as f:
         f.write(base64.b64decode(img_data))
 
+    _write_transform_status(session_id, "captured")
+
     return jsonify({"session_id": session_id})
 
-# 변환 Task
-@celery.task(bind=True)
-def process_transform_task(self, session_id, style_key, gender, overrides):
+# 변환 처리
+def _run_transform_task(session_id, style_key, gender, adetailer_enabled, overrides):
 
     # 실시간 Checkpoint 설정 로드
     checkpoint_path = os.path.join(BASE_DIR, "checkpoints.json")
@@ -365,11 +511,16 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
 
         if style_key not in STYLE_CONFIG:
             raise ValueError(f"Unsupported style: {style_key}")
+        if type(adetailer_enabled) is not bool:
+            raise ValueError("ADetailer enabled flag must be a boolean.")
         if not isinstance(overrides, dict):
             raise ValueError("Style overrides must be an object.")
 
         cfg = copy.deepcopy(STYLE_CONFIG.get(style_key, {}))
         cfg.update(overrides)
+
+        if cfg.get("model_name") is None:
+            adetailer_enabled = False
 
         if gender and cfg.get("model_name") is not None:
             base_prompt = cfg.get("prompt", "")
@@ -462,16 +613,25 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
                                 "threshold_b": 100.0,
                                 "control_mode": "ControlNet is more important"}]
                     }
-                    # 과도한 보정으로 ADetailer는 일단 보류 (원본과 너무 달라지는 문제 발생)
-                    # "ADetailer": {
-                        # "args": [{"ad_model": cfg.get("ad_model", "mediapipe_face_full"),
-                                # "ad_prompt": cfg.get("ad_prompt", ""),
-                                # "ad_negative_prompt": cfg.get("ad_negative_prompt", ""),
-                                # "ad_denoising_strength": cfg.get("ad_denoising_strength", 0.2),
-                                # "ad_confidence": 0.3}]
-                    #}
                 }
             }
+
+            if adetailer_enabled:
+                payload["alwayson_scripts"]["ADetailer"] = {
+                    "args": [
+                        True,
+                        False,
+                        {
+                            "ad_model": cfg.get("ad_model") or "face_yolov8m.pt",
+                            "ad_tab_enable": True,
+                            "ad_prompt": cfg.get("ad_prompt", ""),
+                            "ad_negative_prompt": cfg.get("ad_negative_prompt", ""),
+                            "ad_denoising_strength": cfg.get("ad_denoising_strength", 0.2),
+                            "ad_confidence": cfg.get("ad_confidence", 0.3)
+                        }
+                    ]
+                }
+                logger.info(f"ADetailer enabled for style: {style_key}")
             
             try:
                 r = requests.post(SD_URL, json=payload, timeout=SD_TIMEOUT_SECONDS)
@@ -496,7 +656,37 @@ def process_transform_task(self, session_id, style_key, gender, overrides):
         with open(preview_path, "wb") as f:
             f.write(base64.b64decode(result_b64))
 
+        transform_metadata_path = os.path.join(TEMP_DIR, session_id, "metadata.json")
+        transform_metadata = _load_json_object(transform_metadata_path) or {}
+        transform_metadata.update({
+            "style": style_key,
+            "gender": gender,
+            "adetailer_enabled": adetailer_enabled
+        })
+        _write_json_object(transform_metadata_path, transform_metadata)
+
         return result_b64
+
+
+# 변환 Task
+@celery.task(bind=True)
+def process_transform_task(self, session_id, style_key, gender, adetailer_enabled, overrides):
+    try:
+        result = _run_transform_task(
+            session_id,
+            style_key,
+            gender,
+            adetailer_enabled,
+            overrides
+        )
+        _write_transform_status(session_id, "success")
+        return result
+    except Exception as e:
+        try:
+            _write_transform_status(session_id, "failed", error=str(e))
+        except Exception:
+            logger.exception(f"Failed to record transform failure for session {session_id}")
+        raise
 
 
 # 변환 시작
@@ -505,15 +695,51 @@ def transform():
     data = request.get_json(silent=True) or {}
     session_id = data.get("session_id")
     style_key = data.get("style")
-    gender = data.get("gender") 
+    gender = data.get("gender")
+    adetailer_enabled = data.get("adetailer_enabled", False)
+    add_frame = data.get("add_frame") is True
+    frame_color = data.get("frame_color", DEFAULT_FRAME_COLOR)
     overrides = data.get("overrides", {})
 
     if not session_id or not style_key:
         return jsonify({"error": "변환 요청 정보가 올바르지 않습니다."}), 400
+    if type(adetailer_enabled) is not bool:
+        return jsonify({"error": "ADetailer 보정 여부는 boolean 값이어야 합니다."}), 400
+    if add_frame and (
+        not isinstance(frame_color, str)
+        or frame_color not in FRAME_COLOR_PRESETS
+    ):
+        return jsonify({"error": "지원하지 않는 프레임 색상입니다."}), 400
 
+    session_folder = _get_session_folder(session_id)
+    if (
+        session_folder is None
+        or not os.path.isfile(os.path.join(session_folder, "raw.png"))
+    ):
+        return jsonify({"error": "촬영 세션을 찾을 수 없습니다."}), 409
+
+    task_id = str(uuid.uuid4())
     try:
-        task = process_transform_task.apply_async(args=[session_id, style_key, gender, overrides])
+        _write_json_object(
+            os.path.join(session_folder, "metadata.json"),
+            {
+                "style": style_key,
+                "gender": gender,
+                "add_frame": add_frame,
+                "frame_color": frame_color if add_frame else None,
+                "adetailer_enabled": adetailer_enabled
+            }
+        )
+        _write_transform_status(session_id, "processing", task_id=task_id)
+        task = process_transform_task.apply_async(
+            args=[session_id, style_key, gender, adetailer_enabled, overrides],
+            task_id=task_id
+        )
     except Exception as e:
+        try:
+            _write_transform_status(session_id, "failed", error=str(e))
+        except Exception:
+            logger.exception(f"Failed to record enqueue failure for session {session_id}")
         logger.exception(f"Failed to enqueue transform task: {e}")
         return jsonify({"error": "변환 작업을 시작하지 못했습니다."}), 503
     
@@ -566,6 +792,28 @@ def finalize():
             tunnel_url = "http://localhost:5000"
 
         hash_value = hashlib.sha256(session_id.encode()).hexdigest()[:16]
+
+        transform_metadata = {}
+        transform_metadata_path = os.path.join(TEMP_DIR, session_id, "metadata.json")
+        try:
+            with open(transform_metadata_path, "r", encoding="utf-8") as f:
+                loaded_metadata = json.load(f)
+            if isinstance(loaded_metadata, dict):
+                transform_metadata = loaded_metadata
+        except (OSError, json.JSONDecodeError):
+            pass
+
+        photo_metadata = {
+            "style": transform_metadata.get("style") or style_key,
+            "gender": transform_metadata.get("gender"),
+            "add_frame": add_frame,
+            "frame_color": frame_color if add_frame else None,
+            "adetailer_enabled": transform_metadata.get("adetailer_enabled")
+        }
+        metadata_path = os.path.join(METADATA_DIR, f"{hash_value}.json")
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            json.dump(photo_metadata, f, ensure_ascii=False, indent=2)
+
         public_folder = os.path.join(PUBLIC_DIR, hash_value)
         os.makedirs(public_folder, exist_ok=True)
 
@@ -626,6 +874,20 @@ def serve_image(folder, filename):
     if filename != "result.png" and not is_admin_authenticated():
         abort(401)
     return send_from_directory(os.path.join(PUBLIC_DIR, folder), filename)
+
+
+@app.route("/admin_session_image/<session_id>/<image_type>")
+@admin_required
+def admin_session_image(session_id, image_type):
+    if image_type == "raw":
+        return send_from_directory(TEMP_DIR, f"{session_id}/raw.png")
+    if image_type == "result":
+        folder = hashlib.sha256(session_id.encode()).hexdigest()[:16]
+        public_result_path = os.path.join(PUBLIC_DIR, folder, "result.png")
+        if os.path.isfile(public_result_path):
+            return send_from_directory(os.path.join(PUBLIC_DIR, folder), "result.png")
+        return send_from_directory(PREVIEW_DIR, f"{session_id}.png")
+    abort(404)
 
 # 관리자 페이지
 @app.route("/admin")

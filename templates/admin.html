@@ -392,17 +392,96 @@
         }
 
         .live-indicator {
-            border-color: rgba(92, 230, 196, 0.16);
-            background: rgba(92, 230, 196, 0.08);
-            color: rgba(149, 244, 220, 0.82);
+            margin-left: 0;
             font-weight: 650;
+            transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .live-indicator.is-online {
+            border-color: rgba(92, 230, 196, 0.20);
+            background: rgba(92, 230, 196, 0.09);
+            color: #79f0d3;
+        }
+
+        .live-indicator.is-offline {
+            border-color: rgba(255, 107, 114, 0.24);
+            background: rgba(255, 107, 114, 0.09);
+            color: #ff6b72;
+        }
+
+        .admin-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            margin-left: auto;
+        }
+
+        .admin-stats {
+            display: flex;
+            align-items: stretch;
+            gap: 8px;
+        }
+
+        .admin-stat {
+            display: flex;
+            min-width: 88px;
+            min-height: 44px;
+            flex-direction: column;
+            justify-content: center;
+            gap: 3px;
+            padding: 7px 10px;
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.045);
+        }
+
+        .admin-stat-transform {
+            min-width: 160px;
+        }
+
+        .admin-stat-label {
+            color: var(--text-muted);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        .admin-stat-value {
+            color: rgb(240, 242, 232);
+            font-size: 13px;
+            font-weight: 800;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        .stats-success {
+            color: #5ce6c4;
+        }
+
+        .stats-failure {
+            color: #ff6b72;
+        }
+
+        .stats-neutral {
+            color: rgb(240, 242, 232);
         }
 
         .live-dot {
             width: 7px;
             height: 7px;
-            background: #5ce6c4;
+            background: currentColor;
+            box-shadow: none;
+            animation: none;
+        }
+
+        .live-indicator.is-online .live-dot {
             box-shadow: 0 0 0 4px rgba(92, 230, 196, 0.11);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .live-indicator.is-offline .live-dot {
+            box-shadow: 0 0 0 4px rgba(255, 107, 114, 0.11);
         }
 
         #content {
@@ -454,6 +533,67 @@
             letter-spacing: 0.02em;
         }
 
+        .item-badge.status-success {
+            border-color: rgba(92, 230, 196, 0.24);
+            background: rgba(92, 230, 196, 0.10);
+            color: #79f0d3;
+        }
+
+        .item-badge.status-failed {
+            border-color: rgba(255, 107, 114, 0.26);
+            background: rgba(255, 107, 114, 0.10);
+            color: #ff858b;
+        }
+
+        .item-badge.status-processing {
+            border-color: rgba(255, 190, 92, 0.24);
+            background: rgba(255, 190, 92, 0.10);
+            color: #ffc978;
+        }
+
+        .item-badge.status-captured {
+            border-color: rgba(255, 255, 255, 0.10);
+            background: rgba(255, 255, 255, 0.055);
+            color: var(--text-muted);
+        }
+
+        .photo-metadata {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+            margin: 0 0 14px;
+        }
+
+        .photo-metadata-item {
+            min-width: 0;
+            padding: 9px 10px;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 11px;
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+        .photo-metadata-label,
+        .photo-metadata-value {
+            min-width: 0;
+            margin: 0;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .photo-metadata-label {
+            margin-bottom: 4px;
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .photo-metadata-value {
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+
         .row {
             gap: 10px;
         }
@@ -467,6 +607,21 @@
         .img-box img {
             aspect-ratio: 4 / 3;
             object-fit: cover;
+        }
+
+        .image-placeholder {
+            display: grid;
+            aspect-ratio: 4 / 3;
+            place-items: center;
+            padding: 18px;
+            text-align: center;
+        }
+
+        .image-placeholder-copy {
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 650;
+            line-height: 1.5;
         }
 
         .image-open-button {
@@ -614,15 +769,42 @@
 
             .admin-header {
                 top: 8px;
+                flex-wrap: wrap;
                 padding: 12px;
             }
 
+            .admin-header-actions {
+                width: 100%;
+                align-items: stretch;
+                flex-direction: column;
+                margin-left: 0;
+            }
+
+            .admin-stats {
+                display: grid;
+                grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.55fr) minmax(0, 0.75fr);
+                width: 100%;
+                gap: 6px;
+                overflow: visible;
+            }
+
+            .admin-stat {
+                min-width: 0;
+                padding: 7px 8px;
+            }
+
+            .admin-stat-transform {
+                min-width: 0;
+            }
+
             .live-indicator {
+                align-self: flex-end;
                 padding: 7px 10px;
             }
 
             .live-indicator span:last-child {
-                display: none;
+                display: inline;
+                font-size: 10px;
             }
 
             .row {
@@ -676,9 +858,27 @@
                 </svg>
             </div>
             <h1>관리자 페이지</h1>
-            <div class="live-indicator">
-                <span class="live-dot"></span>
-                <span>실시간 업데이트</span>
+            <div class="admin-header-actions">
+                <div class="admin-stats" aria-label="촬영 및 변환 통계">
+                    <div class="admin-stat">
+                        <span class="admin-stat-label">촬영 수</span>
+                        <strong id="photo-count" class="admin-stat-value">0</strong>
+                    </div>
+                    <div class="admin-stat admin-stat-transform">
+                        <span class="admin-stat-label">변환 성공 / 실패 / 미변환</span>
+                        <strong id="transform-summary" class="admin-stat-value" aria-label="변환 성공 0, 실패 0, 미변환 0, 전체 0">
+                            <span id="transform-success-count" class="stats-success">0</span><span class="stats-neutral">/</span><span id="transform-failure-count" class="stats-failure">0</span><span class="stats-neutral">/</span><span id="transform-untransformed-count" class="stats-neutral">0</span><span class="stats-neutral">(total:</span><span id="transform-total-count" class="stats-neutral">0</span><span class="stats-neutral">)</span>
+                        </strong>
+                    </div>
+                    <div class="admin-stat">
+                        <span class="admin-stat-label">변환 성공률</span>
+                        <strong id="transform-success-rate" class="admin-stat-value">0%</strong>
+                    </div>
+                </div>
+                <div id="live-update-indicator" class="live-indicator is-offline" aria-live="polite" aria-label="실시간 업데이트: 연결 확인 중">
+                    <span class="live-dot"></span>
+                    <span>실시간 업데이트</span>
+                </div>
             </div>
         </header>
 
@@ -699,13 +899,89 @@
 
     <script>
         let adminRefreshTimer = null;
+        let liveUpdateHealthTimer = null;
+        let adminDataRequestInFlight = false;
+        const ADMIN_REFRESH_TIMEOUT_MS = 10000;
+        const LIVE_UPDATE_STALE_AFTER_MS = 10000;
+        let lastSuccessfulAdminRefreshAt = 0;
 
-        function showAdmin(initialItems = null) {
+        function setLiveUpdateStatus(isOnline) {
+            const indicator = document.getElementById('live-update-indicator');
+            if (!indicator) return;
+
+            if (isOnline) lastSuccessfulAdminRefreshAt = Date.now();
+            indicator.classList.toggle('is-online', isOnline);
+            indicator.classList.toggle('is-offline', !isOnline);
+            const statusText = isOnline ? '정상 작동 중' : '연결 오류';
+            indicator.setAttribute('aria-label', `실시간 업데이트: ${statusText}`);
+            indicator.title = statusText;
+        }
+
+        function checkLiveUpdateHealth() {
+            if (
+                lastSuccessfulAdminRefreshAt > 0
+                && Date.now() - lastSuccessfulAdminRefreshAt > LIVE_UPDATE_STALE_AFTER_MS
+            ) {
+                setLiveUpdateStatus(false);
+            }
+        }
+
+        function updateStats(stats = {}) {
+            const photoCount = Number(stats.photo_count) || 0;
+            const successCount = Number(stats.success_count) || 0;
+            const failureCount = Number(stats.failure_count) || 0;
+            const untransformedCount = Number(stats.untransformed_count) || 0;
+            const summaryTotalValue = Number(stats.summary_total);
+            const summaryTotal = Number.isFinite(summaryTotalValue)
+                ? summaryTotalValue
+                : successCount + failureCount + untransformedCount;
+            const successRate = Number(stats.success_rate) || 0;
+            const formattedRate = Number.isInteger(successRate)
+                ? `${successRate}%`
+                : `${successRate.toFixed(1)}%`;
+
+            document.getElementById('photo-count').textContent = photoCount;
+            document.getElementById('transform-success-count').textContent = successCount;
+            document.getElementById('transform-failure-count').textContent = failureCount;
+            document.getElementById('transform-untransformed-count').textContent = untransformedCount;
+            document.getElementById('transform-total-count').textContent = summaryTotal;
+            document.getElementById('transform-success-rate').textContent = formattedRate;
+            document.getElementById('transform-summary').setAttribute(
+                'aria-label',
+                `변환 성공 ${successCount}, 실패 ${failureCount}, 미변환 ${untransformedCount}, 전체 ${summaryTotal}`
+            );
+        }
+
+        function renderAdminData(data) {
+            if (Array.isArray(data)) {
+                updateStats();
+                updateDOM(data.map(item => ({
+                    ...item,
+                    id: item.id || item.folder,
+                    status: item.status || 'success',
+                    raw_url: item.raw_url || `/public/${item.folder}/raw.png`,
+                    result_url: item.result_url || `/public/${item.folder}/result.png`
+                })));
+                return;
+            }
+            updateStats(data?.stats);
+            updateDOM(Array.isArray(data?.items) ? data.items : []);
+        }
+
+        function showAdmin(initialData = null) {
             document.getElementById('login-overlay').style.display = 'none';
             document.getElementById('app-content').style.display = 'block';
-            if (initialItems) updateDOM(initialItems);
-            else loadData();
+            if (initialData) {
+                renderAdminData(initialData);
+                setLiveUpdateStatus(true);
+            } else {
+                setLiveUpdateStatus(false);
+                loadData();
+            }
             if (!adminRefreshTimer) adminRefreshTimer = setInterval(loadData, 3000);
+            if (!liveUpdateHealthTimer) {
+                liveUpdateHealthTimer = setInterval(checkLiveUpdateHealth, 1000);
+            }
         }
 
         async function attemptLogin() {
@@ -738,7 +1014,7 @@
             if (e.key === 'Enter') attemptLogin();
         });
 
-        let oldItems = [];
+        const itemRemovalTimers = new Map();
 
         const imageModal = document.getElementById('image-modal');
         const imageModalPreview = document.getElementById('image-modal-preview');
@@ -784,45 +1060,185 @@
             }
         });
 
-        function createItemHTML(item) {
+        const STYLE_LABELS = Object.freeze({
+            none: '변환하지 않음',
+            distortion_lens_filter: '볼록거울',
+            face_filter: '얼굴 필터',
+            canny_filter: '윤곽선',
+            anime: '애니메이션',
+            watercolor: '수채화',
+            comic: '코믹북'
+        });
+        const GENDER_LABELS = Object.freeze({
+            male: '남성',
+            female: '여성',
+            mixed: '혼성 / 커플'
+        });
+        const FRAME_COLOR_LABELS = Object.freeze({
+            clear_white: '클리어 화이트',
+            matte_black: '매트 블랙',
+            cybernetic_blue: '사이버네틱 블루',
+            metal_purple: '메탈 퍼플',
+            liquid_glass: '리퀴드 글라스',
+            black_white: '블랙 & 화이트',
+            cobalt_cream: '코발트 & 크림',
+            burgundy_blush: '버건디 & 블러시',
+            forest_sand: '포레스트 & 샌드',
+            orange_navy: '오렌지 & 네이비'
+        });
+        const STATUS_CONFIG = Object.freeze({
+            captured: { label: '촬영됨', placeholder: '아직 변환하지 않은 사진입니다.' },
+            processing: { label: '변환 중', placeholder: '변환 결과를 생성하고 있습니다.' },
+            success: { label: '변환 성공', placeholder: '변환 결과를 준비하고 있습니다.' },
+            failed: { label: '변환 실패', placeholder: '변환에 실패하여 결과 사진이 없습니다.' }
+        });
+
+        function escapeHTML(value) {
+            return String(value ?? '').replace(/[&<>"']/g, character => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            })[character]);
+        }
+
+        function getMetadataLabel(labels, value, hasMetadata) {
+            if (!hasMetadata || value === null || value === undefined || value === '') {
+                return '기록 없음';
+            }
+            return labels[value] || '알 수 없음';
+        }
+
+        function getBooleanLabel(value, hasMetadata) {
+            if (!hasMetadata || typeof value !== 'boolean') return '기록 없음';
+            return value ? '사용' : '미사용';
+        }
+
+        function createPhotoMetadataHTML(item) {
+            const hasMetadata = Boolean(item.metadata && typeof item.metadata === 'object');
+            const metadata = hasMetadata ? item.metadata : {};
+            const frameColorLabel = !hasMetadata
+                ? '기록 없음'
+                : metadata.add_frame === false
+                    ? '해당 없음'
+                    : getMetadataLabel(FRAME_COLOR_LABELS, metadata.frame_color, true);
+
             return `
-                <div class="item" id="item-${item.folder}">
+                <dl class="photo-metadata" aria-label="변환 설정">
+                    <div class="photo-metadata-item">
+                        <dt class="photo-metadata-label">스타일</dt>
+                        <dd class="photo-metadata-value">${getMetadataLabel(STYLE_LABELS, metadata.style, hasMetadata)}</dd>
+                    </div>
+                    <div class="photo-metadata-item">
+                        <dt class="photo-metadata-label">성별</dt>
+                        <dd class="photo-metadata-value">${getMetadataLabel(GENDER_LABELS, metadata.gender, hasMetadata)}</dd>
+                    </div>
+                    <div class="photo-metadata-item">
+                        <dt class="photo-metadata-label">프레임 여부</dt>
+                        <dd class="photo-metadata-value">${getBooleanLabel(metadata.add_frame, hasMetadata)}</dd>
+                    </div>
+                    <div class="photo-metadata-item">
+                        <dt class="photo-metadata-label">프레임 색깔</dt>
+                        <dd class="photo-metadata-value">${frameColorLabel}</dd>
+                    </div>
+                    <div class="photo-metadata-item">
+                        <dt class="photo-metadata-label">ADetailer 보정</dt>
+                        <dd class="photo-metadata-value">${getBooleanLabel(metadata.adetailer_enabled, hasMetadata)}</dd>
+                    </div>
+                </dl>
+            `;
+        }
+
+        function createImageHTML(item, type) {
+            const isRaw = type === 'raw';
+            const url = isRaw ? item.raw_url : item.result_url;
+            const label = isRaw ? 'RAW' : 'Result';
+            const status = STATUS_CONFIG[item.status] || STATUS_CONFIG.captured;
+
+            if (!url) {
+                const placeholder = isRaw ? '원본 사진이 없습니다.' : status.placeholder;
+                return `
+                    <div class="img-box image-placeholder" aria-label="${escapeHTML(label)} 이미지 없음">
+                        <div class="img-title">${escapeHTML(label)}</div>
+                        <div class="image-placeholder-copy">${escapeHTML(placeholder)}</div>
+                    </div>
+                `;
+            }
+
+            const separator = String(url).includes('?') ? '&' : '?';
+            const imageSrc = `${url}${separator}cache=${encodeURIComponent(item.timestamp)}`;
+            return `
+                <button class="img-box image-open-button" type="button" data-image-src="${escapeHTML(imageSrc)}" data-image-label="${escapeHTML(label)}">
+                    <div class="img-title">${escapeHTML(label)}</div>
+                    <img src="${escapeHTML(imageSrc)}" alt="${escapeHTML(label)}">
+                </button>
+            `;
+        }
+
+        function createItemHTML(item) {
+            const itemId = item.id || item.folder;
+            const statusKey = STATUS_CONFIG[item.status] ? item.status : 'captured';
+            const status = STATUS_CONFIG[statusKey];
+            return `
+                <div class="item" id="item-${escapeHTML(itemId)}">
                     <div class="item-header">
                         <div class="item-info">
-                            <div class="folder-name">${item.folder}</div>
-                            <div class="time-stamp">${item.time}</div>
+                            <div class="folder-name">${escapeHTML(item.folder)}</div>
+                            <div class="time-stamp">${escapeHTML(item.time)}</div>
                         </div>
-                        <div class="item-badge">처리됨</div>
+                        <div class="item-badge status-${escapeHTML(statusKey)}">${escapeHTML(status.label)}</div>
                     </div>
 
+                    ${createPhotoMetadataHTML(item)}
+
                     <div class="row">
-                        <button class="img-box image-open-button" type="button" data-image-src="/public/${item.folder}/raw.png?cache=${item.timestamp}" data-image-label="RAW">
-                            <div class="img-title">RAW</div>
-                            <img src="/public/${item.folder}/raw.png?cache=${item.timestamp}" alt="RAW">
-                        </button>
-                        <button class="img-box image-open-button" type="button" data-image-src="/public/${item.folder}/result.png?cache=${item.timestamp}" data-image-label="Result">
-                            <div class="img-title">Result</div>
-                            <img src="/public/${item.folder}/result.png?cache=${item.timestamp}" alt="Result">
-                        </button>
+                        ${createImageHTML(item, 'raw')}
+                        ${createImageHTML(item, 'result')}
                     </div>
                 </div>
             `;
         }
 
+        function getItemSignature(item) {
+            return JSON.stringify([
+                item.status,
+                item.raw_url,
+                item.result_url,
+                item.timestamp,
+                item.metadata
+            ]);
+        }
+
+        function createItemElement(item, index, animate = true) {
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = createItemHTML(item);
+            const element = wrapper.firstElementChild;
+            element.dataset.itemSignature = getItemSignature(item);
+            if (animate) element.style.animationDelay = `${index * 0.08}s`;
+            return element;
+        }
+
         function updateDOM(newItems) {
             const container = document.getElementById("content");
 
-            if (newItems.length === 0 && oldItems.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <polyline points="21 15 16 10 5 21"/>
-                        </svg>
-                        <div class="empty-text">아직 처리된 이미지가 없습니다</div>
-                    </div>
-                `;
+            if (newItems.length === 0) {
+                itemRemovalTimers.forEach(timer => clearTimeout(timer));
+                itemRemovalTimers.clear();
+                container.querySelectorAll('.item').forEach(element => element.remove());
+
+                if (!container.querySelector('.empty-state')) {
+                    container.insertAdjacentHTML('beforeend', `
+                        <div class="empty-state">
+                            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                            <div class="empty-text">아직 처리된 이미지가 없습니다</div>
+                        </div>
+                    `);
+                }
                 return;
             }
 
@@ -831,30 +1247,45 @@
                 emptyState.remove();
             }
 
+            const nextItemIds = new Set(newItems.map(item => `item-${item.id || item.folder}`));
+
             newItems.forEach((item, index) => {
-                const id = `item-${item.folder}`;
+                const itemId = item.id || item.folder;
+                const id = `item-${itemId}`;
                 let el = document.getElementById(id);
+                const signature = getItemSignature(item);
+
+                if (itemRemovalTimers.has(id)) {
+                    clearTimeout(itemRemovalTimers.get(id));
+                    itemRemovalTimers.delete(id);
+                    if (el) el.style.animation = '';
+                }
 
                 if (!el) {
-                    const div = document.createElement("div");
-                    div.innerHTML = createItemHTML(item);
-                    const newEl = div.firstElementChild;
-                    newEl.style.animationDelay = `${index * 0.08}s`;
-                    container.prepend(newEl);
+                    el = createItemElement(item, index);
+                } else if (el.dataset.itemSignature !== signature) {
+                    const updatedEl = createItemElement(item, index, false);
+                    el.replaceWith(updatedEl);
+                    el = updatedEl;
+                }
+
+                const elementAtIndex = container.children[index];
+                if (elementAtIndex !== el) {
+                    container.insertBefore(el, elementAtIndex || null);
                 }
             });
 
-            oldItems.forEach(item => {
-                if (!newItems.find(n => n.folder === item.folder)) {
-                    const el = document.getElementById(`item-${item.folder}`);
-                    if (el) {
-                        el.style.animation = 'cardExit 0.25s ease forwards';
-                        setTimeout(() => el.remove(), 250);
-                    }
+            container.querySelectorAll('.item').forEach(el => {
+                if (!nextItemIds.has(el.id) && !itemRemovalTimers.has(el.id)) {
+                    el.style.animation = 'cardExit 0.25s ease forwards';
+                    const removalTimer = setTimeout(() => {
+                        el.remove();
+                        itemRemovalTimers.delete(el.id);
+                    }, 250);
+                    itemRemovalTimers.set(el.id, removalTimer);
                 }
             });
 
-            oldItems = newItems;
         }
 
         const style = document.createElement('style');
@@ -869,27 +1300,45 @@
         document.head.appendChild(style);
 
         async function loadData() {
+            if (adminDataRequestInFlight) return;
+            adminDataRequestInFlight = true;
+            const requestController = new AbortController();
+            const requestTimeout = setTimeout(
+                () => requestController.abort(),
+                ADMIN_REFRESH_TIMEOUT_MS
+            );
+
             try {
-                const res = await fetch("/admin_data");
+                const res = await fetch("/admin_data", {
+                    signal: requestController.signal,
+                    cache: 'no-store'
+                });
                 if (res.status === 401) {
+                    setLiveUpdateStatus(false);
                     if (adminRefreshTimer) clearInterval(adminRefreshTimer);
                     adminRefreshTimer = null;
+                    if (liveUpdateHealthTimer) clearInterval(liveUpdateHealthTimer);
+                    liveUpdateHealthTimer = null;
                     document.getElementById('app-content').style.display = 'none';
                     document.getElementById('login-overlay').style.display = 'flex';
                     return;
                 }
-                if (res.ok) {
-                    const items = await res.json();
-                    updateDOM(items);
-                }
+                if (!res.ok) throw new Error(`관리자 데이터 요청 실패: ${res.status}`);
+
+                renderAdminData(await res.json());
+                setLiveUpdateStatus(true);
             } catch (e) {
+                setLiveUpdateStatus(false);
                 console.error("데이터를 불러오는데 실패했습니다.", e);
+            } finally {
+                clearTimeout(requestTimeout);
+                adminDataRequestInFlight = false;
             }
         }
 
         async function restoreAdminSession() {
             try {
-                const res = await fetch('/admin_data');
+                const res = await fetch('/admin_data', { cache: 'no-store' });
                 if (!res.ok) return;
                 showAdmin(await res.json());
             } catch (error) {

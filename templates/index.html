@@ -480,6 +480,11 @@
             outline-offset: 2px;
         }
 
+        .frame-toggle input:disabled + .frame-toggle-track {
+            cursor: not-allowed;
+            opacity: 0.45;
+        }
+
         .frame-color-panel {
             display: block;
             width: 100%;
@@ -715,16 +720,35 @@
         }
 
         .spinner {
+            display: inline-block;
+            flex: 0 0 18px;
+            box-sizing: border-box;
             width: 18px;
-            height: 18px;
-            border: 2px solid transparent;
-            border-top-color: currentColor;
+            aspect-ratio: 1;
             border-radius: 50%;
-            animation: spin 0.7s linear infinite;
+            border: 2px solid currentColor;
+            animation:
+                spinner-sweep 0.8s infinite linear alternate,
+                spinner-turn 1.6s infinite linear;
+            will-change: transform, clip-path;
+            backface-visibility: hidden;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        @keyframes spinner-sweep {
+            0%    { clip-path: polygon(50% 50%, 0 0, 50% 0%, 50% 0%, 50% 0%, 50% 0%, 50% 0%); }
+            12.5% { clip-path: polygon(50% 50%, 0 0, 50% 0%, 100% 0%, 100% 0%, 100% 0%, 100% 0%); }
+            25%   { clip-path: polygon(50% 50%, 0 0, 50% 0%, 100% 0%, 100% 100%, 100% 100%, 100% 100%); }
+            50%   { clip-path: polygon(50% 50%, 0 0, 50% 0%, 100% 0%, 100% 100%, 50% 100%, 0% 100%); }
+            62.5% { clip-path: polygon(50% 50%, 100% 0, 100% 0%, 100% 0%, 100% 100%, 50% 100%, 0% 100%); }
+            75%   { clip-path: polygon(50% 50%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 50% 100%, 0% 100%); }
+            100%  { clip-path: polygon(50% 50%, 50% 100%, 50% 100%, 50% 100%, 50% 100%, 50% 100%, 0% 100%); }
+        }
+
+        @keyframes spinner-turn {
+            0%     { transform: scaleY(1) rotate(0deg); }
+            49.99% { transform: scaleY(1) rotate(135deg); }
+            50%    { transform: scaleY(-1) rotate(0deg); }
+            100%   { transform: scaleY(-1) rotate(-135deg); }
         }
 
         /* Countdown Overlay (화면이 커진 만큼 카운트다운 텍스트 크기 증가 및 밸런스 조정) */
@@ -1246,9 +1270,9 @@
                     <option value="none">변환하지 않기</option>
                     <option value="distortion_lens_filter">[필터] 볼록거울</option>
                     <option value="canny_filter">[필터] 윤곽선</option>
-                    <option value="anime">[스타일] 애니메이션</option>
-                    <option value="watercolor">[스타일] 수채화</option>
-                    <option value="comic">[스타일] 코믹북</option>
+                    <option value="anime" data-adetailer-supported="true">[스타일] 애니메이션</option>
+                    <option value="watercolor" data-adetailer-supported="true">[스타일] 수채화</option>
+                    <option value="comic" data-adetailer-supported="true">[스타일] 코믹북</option>
                 </select>
             </div>
 
@@ -1268,6 +1292,20 @@
                 </div>
                 <label class="frame-toggle">
                     <input id="frameCheckbox" type="checkbox" aria-label="프레임 추가">
+                    <span class="frame-toggle-track" aria-hidden="true"></span>
+                </label>
+            </div>
+
+            <div class="frame-option">
+                <div class="frame-option-copy">
+                    <strong>ADetailer 얼굴 보정</strong>
+                    <span id="adetailerOptionDescription"
+                          data-enabled-text="얼굴 디테일을 추가로 보정합니다."
+                          data-unavailable-text="원본 반환과 필터는 Stable Diffusion을 사용하지 않아 적용할 수 없습니다."
+                          data-select-text="Stable Diffusion 스타일을 선택하면 사용할 수 있습니다.">Stable Diffusion 스타일을 선택하면 사용할 수 있습니다.</span>
+                </div>
+                <label class="frame-toggle">
+                    <input id="adetailerCheckbox" type="checkbox" aria-label="ADetailer 얼굴 보정" aria-describedby="adetailerOptionDescription" disabled>
                     <span class="frame-toggle-track" aria-hidden="true"></span>
                 </label>
             </div>
@@ -1594,6 +1632,8 @@ function goToStyleSelect() {
     document.getElementById("styleModal").style.display = "flex";
     document.getElementById("styleSelect").value = "";
     document.getElementById("genderSelect").value = "";
+    document.getElementById("adetailerCheckbox").checked = false;
+    updateADetailerAvailability();
     document.getElementById("frameCheckbox").checked = false;
     document.querySelector('input[name="frameColor"][value="clear_white"]').checked = true;
     const previewImage = capturedDataURL ? `url('${capturedDataURL}')` : "none";
@@ -1610,13 +1650,31 @@ function checkSelections() {
     const genderValue = document.getElementById("genderSelect").value;
     const transformBtn = document.getElementById("transformBtn");
     updateFramePreviewLayout();
+    updateADetailerAvailability();
     if (styleValue && genderValue) transformBtn.disabled = false;
     else transformBtn.disabled = true;
+}
+
+function updateADetailerAvailability() {
+    const styleSelect = document.getElementById("styleSelect");
+    const checkbox = document.getElementById("adetailerCheckbox");
+    const description = document.getElementById("adetailerOptionDescription");
+    const selectedOption = styleSelect.selectedOptions[0];
+    const isSupported = selectedOption?.dataset.adetailerSupported === "true";
+
+    checkbox.disabled = !isSupported;
+    if (!isSupported) checkbox.checked = false;
+
+    if (isSupported) description.textContent = description.dataset.enabledText;
+    else if (styleSelect.value) description.textContent = description.dataset.unavailableText;
+    else description.textContent = description.dataset.selectText;
 }
 
 function setTransformOptionsDisabled(disabled) {
     document.getElementById("styleSelect").disabled = disabled;
     document.getElementById("genderSelect").disabled = disabled;
+    if (disabled) document.getElementById("adetailerCheckbox").disabled = true;
+    else updateADetailerAvailability();
     document.getElementById("frameCheckbox").disabled = disabled;
     document.querySelectorAll('input[name="frameColor"]').forEach(input => {
         input.disabled = disabled;
@@ -1636,13 +1694,17 @@ async function requestJson(url, options, fallbackMessage) {
 
 async function waitForTransform(taskId, onStateChange) {
     let transformStartedAt = null;
+    let previousState = null;
     while (true) {
         const statusData = await requestJson(
             `/status/${taskId}`,
             undefined,
             "변환 상태를 확인하지 못했습니다."
         );
-        if (typeof onStateChange === "function") onStateChange(statusData.state);
+        if (typeof onStateChange === "function" && statusData.state !== previousState) {
+            previousState = statusData.state;
+            onStateChange(statusData.state);
+        }
         if (statusData.state === "SUCCESS") return;
         if (statusData.state === "FAILURE" || statusData.state === "REVOKED") {
             throw new Error(statusData.status || "AI 변환에 실패했습니다.");
@@ -1657,6 +1719,23 @@ async function waitForTransform(taskId, onStateChange) {
     }
 }
 
+function setTransformButtonStatus(btn, message) {
+    let spinner = btn.querySelector(".spinner");
+    let statusText = btn.querySelector(".transform-status");
+
+    if (!spinner || !statusText) {
+        spinner = document.createElement("span");
+        spinner.className = "spinner";
+        spinner.setAttribute("aria-hidden", "true");
+
+        statusText = document.createElement("span");
+        statusText.className = "transform-status";
+        btn.replaceChildren(spinner, statusText);
+    }
+
+    statusText.textContent = message;
+}
+
 async function startTransform() {
     const btn = document.getElementById("transformBtn");
     if (!window.currentSession) {
@@ -1667,13 +1746,21 @@ async function startTransform() {
     const sessionId = window.currentSession;
     const style = document.getElementById("styleSelect").value;
     const gender = document.getElementById("genderSelect").value;
+    const adetailerEnabled = document.getElementById("adetailerCheckbox").checked;
     const addFrame = document.getElementById("frameCheckbox").checked;
     const frameColor = getSelectedFrameColor();
-    const payload = { session_id: sessionId, style: style, gender: gender };
+    const payload = {
+        session_id: sessionId,
+        style: style,
+        gender: gender,
+        adetailer_enabled: adetailerEnabled,
+        add_frame: addFrame,
+        frame_color: frameColor
+    };
 
     setTransformOptionsDisabled(true);
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> 대기표 발급 중...';
+    setTransformButtonStatus(btn, "대기표 발급 중...");
 
     try {
         const res = await requestJson(
@@ -1687,15 +1774,15 @@ async function startTransform() {
         );
         const taskId = res.task_id;
         if (!taskId) throw new Error("변환 작업 번호를 받지 못했습니다.");
-        btn.innerHTML = '<span class="spinner"></span> 변환 대기 중...';
+        setTransformButtonStatus(btn, "변환 대기 중...");
 
         await waitForTransform(taskId, state => {
             if (state === "STARTED") {
-                btn.innerHTML = '<span class="spinner"></span> AI 변환 중...';
+                setTransformButtonStatus(btn, "AI 변환 중...");
             } else if (state === "RETRY") {
-                btn.innerHTML = '<span class="spinner"></span> AI 변환 재시도 중...';
+                setTransformButtonStatus(btn, "AI 변환 재시도 중...");
             } else if (state === "PENDING") {
-                btn.innerHTML = '<span class="spinner"></span> 변환 대기 중...';
+                setTransformButtonStatus(btn, "변환 대기 중...");
             }
         });
         btn.innerText = "완료";
