@@ -29,7 +29,7 @@ class ColorFormatter(logging.Formatter):
 
     def format(self, record):
         log_color = self.COLORS.get(record.levelno, self.RESET)
-        format_str = f"[%(asctime)s][{log_color}%(levelname)s{self.RESET}|%(filename)s:%(lineno)s] --- %(message)s"
+        format_str = f"[%(asctime)s] [{log_color}%(levelname)s{self.RESET} | %(filename)s:%(lineno)s] --- %(message)s"
         formatter = logging.Formatter(format_str)
         return formatter.format(record)
 
@@ -152,7 +152,10 @@ def admin_required(view):
 # 메인 페이지
 @app.route("/main_page")
 def index():
-    return render_template("index.html", watermark_text=WATERMARK_TEXT)
+    return render_template(
+        "index.html",
+        watermark_text=_get_watermark_text()
+    )
 
 # 관리자 로그인
 @app.route("/admin_login", methods=["POST"])
@@ -297,9 +300,9 @@ logger.info(f"LAN URL: {LAN_URL}")
 
 # SD AUTOMATIC1111 API URL
 SD_URL = "http://127.0.0.1:7860/sdapi/v1/img2img"
-SD_TIMEOUT_SECONDS = 10 * 60
+SD_TIMEOUT_SECONDS = 10 * 60 # 10분 타임아웃
 
-WATERMARK_TEXT = "SNAP POCKET"
+WATERMARK_FORMAT = "%Y/%m/%d | 스냅포켓 포토부스"
 DEFAULT_FRAME_COLOR = "clear_white"
 FRAME_COLOR_PRESETS = {
     "clear_white": {
@@ -346,20 +349,43 @@ FRAME_COLOR_PRESETS = {
 
 
 def _load_watermark_font(font_size):
+    primary_font_path = os.path.join(
+        BASE_DIR,
+        "static",
+        "fonts",
+        "x10y12pxDenkiChipHangul.ttf"
+    )
     font_candidates = [
-        os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts", "arialbd.ttf"),
-        "DejaVuSans-Bold.ttf",
-        "arial.ttf"
+        primary_font_path,
+        os.path.join(
+            os.environ.get("WINDIR", "C:\\Windows"),
+            "Fonts",
+            "arial.ttf"
+        )
     ]
+
     for font_path in font_candidates:
         try:
-            return ImageFont.truetype(font_path, font_size)
+            font = ImageFont.truetype(font_path, font_size)
+            if font_path != primary_font_path:
+                logger.warning("Falling back to Arial for the watermark: %s", font_path)
+            return font
         except OSError:
             continue
-    return ImageFont.load_default()
+
+    raise RuntimeError(
+        "Unable to load a watermark font: " + ", ".join(font_candidates)
+    )
 
 
-def _create_frame_canvas(size, frame_color):
+def _get_watermark_text():
+    return datetime.now().strftime(WATERMARK_FORMAT)
+
+
+def _create_frame_canvas(
+    size,
+    frame_color
+):
     preset = (
         FRAME_COLOR_PRESETS.get(frame_color)
         if isinstance(frame_color, str)
@@ -377,101 +403,123 @@ def _create_frame_canvas(size, frame_color):
     return canvas, preset["watermark"]
 
 
-def create_framed_photo(image_path, output_path, frame_color=DEFAULT_FRAME_COLOR):
-    with Image.open(image_path) as image_source:
-        image = image_source.convert("RGB")
-
-    border_size = max(20, round(image.width * 0.02))
-    font_size = max(18, round(image.width * 0.028))
-    font = _load_watermark_font(font_size)
-
-    measurement_canvas = Image.new("RGB", (1, 1), "white")
-    measurement_draw = ImageDraw.Draw(measurement_canvas)
-    text_box = measurement_draw.textbbox((0, 0), WATERMARK_TEXT, font=font)
-    text_width = text_box[2] - text_box[0]
-    text_height = text_box[3] - text_box[1]
-    watermark_border = text_height + border_size * 2
-
-    canvas_width = image.width + border_size * 2
-    canvas_height = border_size + image.height + watermark_border
-    framed_photo, watermark_fill = _create_frame_canvas(
-        (canvas_width, canvas_height),
-        frame_color
-    )
-    framed_photo.paste(image, (border_size, border_size))
-
-    watermark_x = canvas_width - border_size - text_width - text_box[0]
-    watermark_y = (
-        border_size
-        + image.height
-        + (watermark_border - text_height) // 2
-        - text_box[1]
-    )
-    ImageDraw.Draw(framed_photo).text(
-        (watermark_x, watermark_y),
-        WATERMARK_TEXT,
-        fill=watermark_fill,
-        font=font
-    )
-    framed_photo.save(output_path, format="PNG")
-
-
 def create_framed_collage(
     raw_path,
     transformed_path,
     output_path,
     frame_color=DEFAULT_FRAME_COLOR
 ):
+
     with Image.open(raw_path) as raw_source:
         raw_image = raw_source.convert("RGB")
     with Image.open(transformed_path) as transformed_source:
         transformed_image = transformed_source.convert("RGB")
 
-    content_width = max(raw_image.width, transformed_image.width)
-    border_size = max(20, round(content_width * 0.02))
+    base_width = max(raw_image.width, transformed_image.width)
+    border_size = max(20, round(base_width * 0.02))
+    is_portrait = raw_image.height > raw_image.width
+
+    if is_portrait:
+        content_width = raw_image.width + border_size + transformed_image.width
+        content_height = max(raw_image.height, transformed_image.height)
+    else:
+        content_width = base_width
+        content_height = raw_image.height + border_size + transformed_image.height
+
     font_size = max(18, round(content_width * 0.028))
     font = _load_watermark_font(font_size)
+    watermark = _get_watermark_text()
 
     measurement_canvas = Image.new("RGB", (1, 1), "white")
     measurement_draw = ImageDraw.Draw(measurement_canvas)
-    text_box = measurement_draw.textbbox((0, 0), WATERMARK_TEXT, font=font)
+    text_box = measurement_draw.textbbox((0, 0), watermark, font=font)
     text_width = text_box[2] - text_box[0]
     text_height = text_box[3] - text_box[1]
     watermark_border = text_height + border_size * 2
 
     canvas_width = content_width + border_size * 2
-    canvas_height = (
-        border_size
-        + raw_image.height
-        + border_size
-        + transformed_image.height
-        + watermark_border
-    )
-    raw_x = border_size + (content_width - raw_image.width) // 2
-    transformed_x = border_size + (content_width - transformed_image.width) // 2
-    raw_y = border_size
-    transformed_y = raw_y + raw_image.height + border_size
+    canvas_height = border_size + content_height + watermark_border
+
+    if is_portrait:
+        raw_x = border_size
+        transformed_x = raw_x + raw_image.width + border_size
+        raw_y = border_size + (content_height - raw_image.height) // 2
+        transformed_y = border_size + (content_height - transformed_image.height) // 2
+    else:
+        raw_x = border_size + (content_width - raw_image.width) // 2
+        transformed_x = border_size + (content_width - transformed_image.width) // 2
+        raw_y = border_size
+        transformed_y = raw_y + raw_image.height + border_size
+
     collage, watermark_fill = _create_frame_canvas(
         (canvas_width, canvas_height),
         frame_color
     )
+
     collage.paste(raw_image, (raw_x, raw_y))
     collage.paste(transformed_image, (transformed_x, transformed_y))
 
     watermark_x = canvas_width - border_size - text_width - text_box[0]
     watermark_y = (
-        transformed_y
-        + transformed_image.height
+        border_size
+        + content_height
         + (watermark_border - text_height) // 2
         - text_box[1]
     )
     ImageDraw.Draw(collage).text(
         (watermark_x, watermark_y),
-        WATERMARK_TEXT,
+        watermark,
         fill=watermark_fill,
         font=font
     )
     collage.save(output_path, format="PNG")
+
+
+def create_framed_photo(
+    image_path,
+    output_path,
+    frame_color=DEFAULT_FRAME_COLOR
+):
+    with Image.open(image_path) as image_source:
+        image = image_source.convert("RGB")
+
+    content_width = image.width
+    border_size = max(20, round(content_width * 0.02))
+    font_size = max(18, round(content_width * 0.028))
+    font = _load_watermark_font(font_size)
+    watermark = _get_watermark_text()
+
+    measurement_canvas = Image.new("RGB", (1, 1), "white")
+    measurement_draw = ImageDraw.Draw(measurement_canvas)
+    text_box = measurement_draw.textbbox((0, 0), watermark, font=font)
+    text_width = text_box[2] - text_box[0]
+    text_height = text_box[3] - text_box[1]
+    watermark_border = text_height + border_size * 2
+
+    canvas_width = content_width + border_size * 2
+    canvas_height = border_size + image.height + watermark_border
+    image_x = border_size
+    image_y = border_size
+    framed_photo, watermark_fill = _create_frame_canvas(
+        (canvas_width, canvas_height),
+        frame_color
+    )
+    framed_photo.paste(image, (image_x, image_y))
+
+    watermark_x = canvas_width - border_size - text_width - text_box[0]
+    watermark_y = (
+        image_y
+        + image.height
+        + (watermark_border - text_height) // 2
+        - text_box[1]
+    )
+    ImageDraw.Draw(framed_photo).text(
+        (watermark_x, watermark_y),
+        watermark,
+        fill=watermark_fill,
+        font=font
+    )
+    framed_photo.save(output_path, format="PNG")
 
 # 사진 업로드 (임시 저장)
 @app.route("/upload_temp", methods=["POST"])
@@ -603,14 +651,14 @@ def _run_transform_task(session_id, style_key, gender, adetailer_enabled, overri
                         "args": [{"enabled": True,
                                 "image": init_b64,
                                 "module": "canny",
-                                "model": cfg.get("controlnet_model", "diffusion_pytorch_model [a3cd7cd6]"),
+                                "model": cfg.get("controlnet_model", "control_v11p_sd15_canny_fp16 [b18e0966]"),
                                 "weight": cfg.get("controlnet_weight", 0),
                                 "resize_mode": "Crop and Resize",
                                 "pixel_perfect": True,
                                 "guidance_start": 0.0,
                                 "guidance_end": cfg.get("guidance_end", 1.0),
-                                "threshold_a": 33.0,
-                                "threshold_b": 100.0,
+                                "threshold_a": 100.0,
+                                "threshold_b": 200.0,
                                 "control_mode": "ControlNet is more important"}]
                     }
                 }
@@ -622,12 +670,12 @@ def _run_transform_task(session_id, style_key, gender, adetailer_enabled, overri
                         True,
                         False,
                         {
-                            "ad_model": cfg.get("ad_model") or "face_yolov8m.pt",
+                            "ad_model": cfg.get("ad_model") or "face_yolov8n.pt",
                             "ad_tab_enable": True,
                             "ad_prompt": cfg.get("ad_prompt", ""),
                             "ad_negative_prompt": cfg.get("ad_negative_prompt", ""),
                             "ad_denoising_strength": cfg.get("ad_denoising_strength", 0.2),
-                            "ad_confidence": cfg.get("ad_confidence", 0.3)
+                            "ad_confidence": cfg.get("ad_confidence", 0.45)
                         }
                     ]
                 }

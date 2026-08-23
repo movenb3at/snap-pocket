@@ -1,4 +1,5 @@
 celery
+redis
 Flask
 numpy
 opencv-python

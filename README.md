@@ -16,7 +16,7 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 
 - AI style transformation powered by Stable Diffusion and `img2img`
 - Optional branded photo frames with live color previews and ten presets
-- Instant attachment downloads through the result page or QR codes
+- Instant attachment downloads through QR codes
 - Password-protected monitoring of captured and generated images from the admin page
 - Local-network operation with automated HTTPS access through a Cloudflare Quick Tunnel
 - Designed for festivals, weddings, brand activations, arcades, and other events
@@ -29,8 +29,8 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 | --- | --- |
 | Browser-based camera UI | Captures photos through a streamlined web interface and ignores stale uploads after a retake |
 | AI image transformation | Applies configured styles through Stable Diffusion WebUI and `img2img` |
-| Photo framing | Adds an optional `SNAP POCKET` frame with five solid and five two-tone color presets |
-| Direct and QR delivery | Serves the finished PNG as an attachment from the result page or a scanned QR code |
+| Photo framing | Adds an optional date-stamped SnapPocket frame with five solid and five two-tone color presets; portrait comparisons are placed side by side |
+| QR delivery | Serves the finished PNG as an attachment from a scanned QR code |
 | Admin dashboard | Uses server-side session authentication and shows original and generated images in taller 4:3 previews with a full-image viewer |
 | LAN and public access | Supports trusted local networks and automatically manages a temporary Cloudflare Quick Tunnel URL |
 | Folder monitoring | Detects newly generated images in real time with Watchdog |
@@ -62,7 +62,7 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 | Job processing | Celery with Memurai (Redis-compatible service for Windows) |
 | QR generation | `qrcode` for Python |
 | Frontend | HTML, CSS, JavaScript |
-| Image processing | Pillow (PIL) |
+| Image processing | Pillow (PIL), local DenkiChip font with Arial fallback for watermarks |
 | Connectivity | Local LAN access, optional Cloudflare Tunnel |
 
 ---
@@ -168,7 +168,7 @@ ADetailer can improve facial details, although stronger corrections may produce 
    ```
 
 2. Apply the changes and restart the WebUI.
-3. Download the recommended [`face_yolov8m.pt` model](https://huggingface.co/Bingsu/adetailer/blob/main/face_yolov8m.pt) and place it in the ADetailer model directory used by your WebUI installation.
+3. Download the recommended [`face_yolov8n.pt` model](https://huggingface.co/Bingsu/adetailer/blob/main/face_yolov8n.pt) and place it in the ADetailer model directory used by your WebUI installation.
 
 ### 5. Install Memurai
 
@@ -304,7 +304,7 @@ Only add origins that you control and trust. This Chrome flag is a per-device de
 2. Capture a photo. If the photo is retaken, the previous upload is cancelled and any stale response is ignored.
 3. Choose a style and optionally enable a photo frame and color preset.
 4. Wait for the AI transformation and frame composition to finish. Queue wait time is excluded, and the 10-minute limit starts when the Celery worker begins the Stable Diffusion task; a timeout or backend failure is shown as an error instead of silently returning the original photo.
-5. Download the PNG directly or scan the generated QR code to receive the attachment on a mobile device.
+5. Scan the generated QR code to receive the PNG attachment on a mobile device.
 6. Use **Back to Start** to open `/main_page` on the same origin as the current download page. A Cloudflare download page therefore returns to the Cloudflare HTTPS camera page.
 
 ### Admin Flow
@@ -353,7 +353,7 @@ Administrator authentication is verified by Flask. The admin list and original `
 - [2026-05-18] Password protection added to `admin.html`
 - [2026-06-10] The **Back to Start** button in `download.html` changed from `history.back()` to `LAN_URL`
 - [2026-07-28] Completely changed the design of HTML files.
-- [2026-08-04] Added configurable photo frames, direct QR downloads, full-image admin previews, local UI fonts, and automatic Cloudflare Quick Tunnel URL management.
+- [2026-08-04] Added configurable photo frames, orientation-aware collages, direct QR downloads, full-image previews, local watermark fonts, and automatic Cloudflare Quick Tunnel URL management.
 - [2026-08-06] Added server-side administrator sessions, explicit transform failure handling, retake race protection, queue-aware 10-minute limits, taller admin previews, and same-origin **Back to Start** navigation.
 
 ---

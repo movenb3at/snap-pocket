@@ -64,8 +64,8 @@ try {
 
     # app.py currently reads this file as UTF-16.
     Set-Content -LiteralPath $tunnelUrlPath -Value $tunnelUrl -Encoding Unicode -NoNewline
-    Write-Host "Cloudflare Tunnel URL saved: $tunnelUrl"
-    Write-Host "Press Ctrl+C to stop the tunnel."
+    Write-Host "`nCloudflare Tunnel URL saved: $tunnelUrl"
+    Write-Host "Press Ctrl+C to stop the tunnel.`n"
 
     Wait-Process -Id $tunnelProcess.Id
     $tunnelProcess.Refresh()

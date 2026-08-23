@@ -437,8 +437,9 @@
 
         .image-card {
             z-index: 1;
+            width: min(90vw, 760px);
             margin-bottom: 28px;
-            padding: 14px 14px 48px;
+            padding: 18px 18px 54px;
             border: 1px solid rgba(255, 255, 255, 0.82);
             border-radius: 8px;
             background: #fffcf6;
@@ -462,27 +463,24 @@
         }
 
         #preview {
-            width: min(76vw, 480px);
+            width: 100%;
             max-width: none;
-            aspect-ratio: 16 / 9;
+            height: auto;
+            aspect-ratio: auto;
             border-radius: 3px;
             background:
                 linear-gradient(135deg, rgba(255, 107, 69, 0.18), rgba(89, 222, 192, 0.16)),
                 #e9e3da;
-            object-fit: cover;
+            object-fit: contain;
         }
 
         .button-group {
             z-index: 1;
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: 1fr;
             width: min(100%, 520px);
             max-width: none;
             gap: 12px;
-        }
-
-        .button-group .btn-secondary {
-            grid-column: 1 / -1;
         }
 
         .btn {
@@ -653,19 +651,16 @@
             }
 
             #preview {
-                width: min(82vw, 480px);
+                width: 100%;
             }
 
             .image-card {
+                width: min(94vw, 760px);
                 padding: 10px 10px 42px;
             }
 
             .button-group {
                 grid-template-columns: 1fr;
-            }
-
-            .button-group .btn-secondary {
-                grid-column: auto;
             }
 
             #qrModalContent {
@@ -712,15 +707,6 @@
             <rect x="14" y="14" width="7" height="7"/>
         </svg>
         QR로 다운로드
-    </button>
-
-    <button class="btn btn-success" onclick="downloadImage()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-        사진 다운로드
     </button>
 
     <button class="btn btn-secondary" onclick="window.location.href='/main_page'">
@@ -771,15 +757,6 @@
 </div>
 
 <script>
-function downloadImage() {
-    const folder = "{{ folder }}";
-    const link = document.createElement('a');
-    link.href = `/download/${folder}/`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
 function openQRModal() {
     const modal = document.getElementById("qrModal");
     const qrImg = document.getElementById("qr_image");
