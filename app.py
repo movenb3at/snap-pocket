@@ -3,6 +3,7 @@ from celery import Celery
 import os, uuid, hashlib, json, base64, time
 from datetime import datetime
 from functools import wraps
+from threading import Lock
 import qrcode
 import requests
 from watchdog.observers import Observer
@@ -63,6 +64,9 @@ app.config['CELERY_TRACK_STARTED'] = True
 
 celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
 celery.conf.update(app.config)
+
+_coin_balances_by_client = {}
+_coin_balance_lock = Lock()
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -148,6 +152,84 @@ def admin_required(view):
             return jsonify({"error": "관리자 로그인이 필요합니다."}), 401
         return view(*args, **kwargs)
     return wrapped
+
+
+def _coin_balance_response(payload, status=200):
+    response = jsonify(payload)
+    response.status_code = status
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _get_coin_client_id():
+    raw_client_id = request.headers.get("X-SnapPocket-Client-ID", "").strip()
+    try:
+        return uuid.UUID(raw_client_id).hex
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _get_coin_balance(client_id):
+    with _coin_balance_lock:
+        return _coin_balances_by_client.setdefault(client_id, 0)
+
+
+def _get_coin_balances_snapshot():
+    with _coin_balance_lock:
+        return [
+            {"client_id": client_id, "balance": balance}
+            for client_id, balance in sorted(_coin_balances_by_client.items())
+        ]
+
+
+@app.route("/coin_balance", methods=["GET"])
+def coin_balance():
+    client_id = _get_coin_client_id()
+    if client_id is None:
+        return _coin_balance_response({
+            "error": "유효한 클라이언트 ID가 필요합니다."
+        }, 400)
+    return _coin_balance_response({"balance": _get_coin_balance(client_id)})
+
+
+@app.route("/coin_balance/add", methods=["POST"])
+def add_coin():
+    if not request.is_json:
+        return _coin_balance_response({
+            "error": "JSON 요청만 허용됩니다."
+        }, 415)
+    client_id = _get_coin_client_id()
+    if client_id is None:
+        return _coin_balance_response({
+            "error": "유효한 클라이언트 ID가 필요합니다."
+        }, 400)
+    with _coin_balance_lock:
+        balance = _coin_balances_by_client.get(client_id, 0) + 1
+        _coin_balances_by_client[client_id] = balance
+    return _coin_balance_response({"balance": balance})
+
+
+@app.route("/coin_balance/consume", methods=["POST"])
+def consume_coin():
+    if not request.is_json:
+        return _coin_balance_response({
+            "error": "JSON 요청만 허용됩니다."
+        }, 415)
+    client_id = _get_coin_client_id()
+    if client_id is None:
+        return _coin_balance_response({
+            "error": "유효한 클라이언트 ID가 필요합니다."
+        }, 400)
+    with _coin_balance_lock:
+        balance = _coin_balances_by_client.get(client_id, 0)
+        if balance <= 0:
+            return _coin_balance_response({
+                "error": "사용 가능한 코인이 없습니다.",
+                "balance": 0
+            }, 409)
+        balance -= 1
+        _coin_balances_by_client[client_id] = balance
+    return _coin_balance_response({"balance": balance})
 
 # 메인 페이지
 @app.route("/main_page")
@@ -267,6 +349,7 @@ def admin_data():
     )
     return jsonify({
         "items": items,
+        "coin_clients": _get_coin_balances_snapshot(),
         "stats": {
             "photo_count": len(session_folders),
             "success_count": success_count,
@@ -746,6 +829,7 @@ def transform():
     gender = data.get("gender")
     adetailer_enabled = data.get("adetailer_enabled", False)
     add_frame = data.get("add_frame") is True
+    result_only = data.get("result_only", False)
     frame_color = data.get("frame_color", DEFAULT_FRAME_COLOR)
     overrides = data.get("overrides", {})
 
@@ -753,6 +837,12 @@ def transform():
         return jsonify({"error": "변환 요청 정보가 올바르지 않습니다."}), 400
     if type(adetailer_enabled) is not bool:
         return jsonify({"error": "ADetailer 보정 여부는 boolean 값이어야 합니다."}), 400
+    if type(result_only) is not bool:
+        return jsonify({"error": "결과물만 출력 여부는 boolean 값이어야 합니다."}), 400
+    if result_only and (not add_frame or style_key == "none"):
+        return jsonify({
+            "error": "결과물만 출력은 프레임을 사용하는 변환 결과에만 적용할 수 있습니다."
+        }), 400
     if add_frame and (
         not isinstance(frame_color, str)
         or frame_color not in FRAME_COLOR_PRESETS
@@ -775,6 +865,7 @@ def transform():
                 "gender": gender,
                 "add_frame": add_frame,
                 "frame_color": frame_color if add_frame else None,
+                "result_only": result_only,
                 "adetailer_enabled": adetailer_enabled
             }
         )
@@ -816,9 +907,12 @@ def finalize():
     session_id = data.get("session_id")
     add_frame = data.get("add_frame") is True
     style_key = data.get("style")
+    result_only = data.get("result_only", False)
     frame_color = data.get("frame_color", DEFAULT_FRAME_COLOR)
     if not session_id:
         return jsonify({"error": "저장할 촬영 세션이 없습니다."}), 400
+    if type(result_only) is not bool:
+        return jsonify({"error": "결과물만 출력 여부는 boolean 값이어야 합니다."}), 400
     if add_frame and (
         not isinstance(frame_color, str)
         or frame_color not in FRAME_COLOR_PRESETS
@@ -851,11 +945,21 @@ def finalize():
         except (OSError, json.JSONDecodeError):
             pass
 
+        effective_style_key = transform_metadata.get("style") or style_key
+        stored_result_only = transform_metadata.get("result_only")
+        if type(stored_result_only) is bool:
+            result_only = stored_result_only
+        if result_only and (not add_frame or effective_style_key == "none"):
+            return jsonify({
+                "error": "결과물만 출력은 프레임을 사용하는 변환 결과에만 적용할 수 있습니다."
+            }), 400
+
         photo_metadata = {
-            "style": transform_metadata.get("style") or style_key,
+            "style": effective_style_key,
             "gender": transform_metadata.get("gender"),
             "add_frame": add_frame,
             "frame_color": frame_color if add_frame else None,
+            "result_only": result_only,
             "adetailer_enabled": transform_metadata.get("adetailer_enabled")
         }
         metadata_path = os.path.join(METADATA_DIR, f"{hash_value}.json")
@@ -867,7 +971,7 @@ def finalize():
 
         final_path = os.path.join(public_folder, "result.png")
         if add_frame:
-            if style_key == "none":
+            if effective_style_key == "none" or result_only:
                 create_framed_photo(preview_path, final_path, frame_color)
             else:
                 create_framed_collage(

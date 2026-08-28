@@ -762,6 +762,123 @@
             background: rgba(255, 255, 255, 0.025);
         }
 
+        .coin-client-panel {
+            position: relative;
+            z-index: 1;
+            margin-bottom: 28px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 16px;
+            background: #111114;
+        }
+
+        .coin-client-header {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 16px;
+        }
+
+        .coin-client-eyebrow {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+        }
+
+        .coin-client-title {
+            font-size: 17px;
+            font-weight: 650;
+            letter-spacing: -0.02em;
+        }
+
+        .coin-client-summary {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .coin-client-summary strong {
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        .coin-client-summary-divider {
+            width: 1px;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.16);
+        }
+
+        .coin-client-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 10px;
+        }
+
+        .coin-client-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            min-width: 0;
+            padding: 13px 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            background: #18181c;
+        }
+
+        .coin-client-identity {
+            min-width: 0;
+        }
+
+        .coin-client-name {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 13px;
+            font-weight: 650;
+        }
+
+        .coin-client-id {
+            display: block;
+            overflow: hidden;
+            color: var(--text-muted);
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+            font-size: 10px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .coin-client-balance {
+            flex: none;
+            min-width: 56px;
+            color: #f8fafc;
+            font-size: 18px;
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+        }
+
+        .coin-client-balance-unit {
+            margin-left: 2px;
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .coin-client-empty {
+            grid-column: 1 / -1;
+            padding: 22px 16px;
+            border: 1px dashed rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            color: var(--text-muted);
+            font-size: 13px;
+            text-align: center;
+        }
+
         @media (max-width: 680px) {
             #app-content {
                 padding: 14px;
@@ -828,6 +945,21 @@
             .image-modal-stage {
                 padding: 8px;
             }
+
+            .coin-client-panel {
+                margin-bottom: 18px;
+                padding: 15px;
+            }
+
+            .coin-client-header {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .coin-client-list {
+                grid-template-columns: 1fr;
+            }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -881,6 +1013,23 @@
                 </div>
             </div>
         </header>
+
+        <section class="coin-client-panel" aria-labelledby="coin-client-title">
+            <div class="coin-client-header">
+                <div>
+                    <span class="coin-client-eyebrow">COIN BALANCE</span>
+                    <h2 id="coin-client-title" class="coin-client-title">기기별 코인 현황</h2>
+                </div>
+                <div class="coin-client-summary" aria-live="polite">
+                    <strong id="coin-client-count">0대</strong>
+                    <span class="coin-client-summary-divider" aria-hidden="true"></span>
+                    <span>전체 <strong id="coin-balance-total">0개</strong></span>
+                </div>
+            </div>
+            <div id="coin-client-list" class="coin-client-list">
+                <p class="coin-client-empty">현재 서버에 연결된 기기가 없습니다.</p>
+            </div>
+        </section>
 
         <div id="content"></div>
     </div>
@@ -952,9 +1101,65 @@
             );
         }
 
+        function updateCoinClients(coinClients = []) {
+            const clients = Array.isArray(coinClients)
+                ? coinClients
+                    .filter(client => typeof client?.client_id === 'string')
+                    .map(client => ({
+                        clientId: client.client_id,
+                        balance: Math.max(0, Number(client.balance) || 0)
+                    }))
+                : [];
+            const totalBalance = clients.reduce((sum, client) => sum + client.balance, 0);
+            const list = document.getElementById('coin-client-list');
+
+            document.getElementById('coin-client-count').textContent = `${clients.length}대`;
+            document.getElementById('coin-balance-total').textContent = `${totalBalance.toLocaleString('ko-KR')}개`;
+            list.replaceChildren();
+
+            if (clients.length === 0) {
+                const empty = document.createElement('p');
+                empty.className = 'coin-client-empty';
+                empty.textContent = '현재 서버에 연결된 기기가 없습니다.';
+                list.appendChild(empty);
+                return;
+            }
+
+            clients.forEach((client, index) => {
+                const card = document.createElement('article');
+                card.className = 'coin-client-card';
+
+                const identity = document.createElement('div');
+                identity.className = 'coin-client-identity';
+
+                const name = document.createElement('strong');
+                name.className = 'coin-client-name';
+                name.textContent = `기기 ${index + 1}`;
+
+                const clientId = document.createElement('code');
+                clientId.className = 'coin-client-id';
+                clientId.textContent = client.clientId;
+                clientId.title = client.clientId;
+
+                const balance = document.createElement('strong');
+                balance.className = 'coin-client-balance';
+                balance.textContent = client.balance.toLocaleString('ko-KR');
+
+                const unit = document.createElement('span');
+                unit.className = 'coin-client-balance-unit';
+                unit.textContent = '개';
+                balance.appendChild(unit);
+
+                identity.append(name, clientId);
+                card.append(identity, balance);
+                list.appendChild(card);
+            });
+        }
+
         function renderAdminData(data) {
             if (Array.isArray(data)) {
                 updateStats();
+                updateCoinClients();
                 updateDOM(data.map(item => ({
                     ...item,
                     id: item.id || item.folder,
@@ -965,6 +1170,7 @@
                 return;
             }
             updateStats(data?.stats);
+            updateCoinClients(data?.coin_clients);
             updateDOM(Array.isArray(data?.items) ? data.items : []);
         }
 
@@ -1115,6 +1321,16 @@
             return value ? '사용' : '미사용';
         }
 
+        function getFrameOutputLabel(metadata, hasMetadata) {
+            if (!hasMetadata || typeof metadata.add_frame !== 'boolean') {
+                return '기록 없음';
+            }
+            if (!metadata.add_frame) return '미사용';
+            return metadata.result_only === true
+                ? '사용/단일출력'
+                : '사용/복수출력';
+        }
+
         function createPhotoMetadataHTML(item) {
             const hasMetadata = Boolean(item.metadata && typeof item.metadata === 'object');
             const metadata = hasMetadata ? item.metadata : {};
@@ -1136,7 +1352,7 @@
                     </div>
                     <div class="photo-metadata-item">
                         <dt class="photo-metadata-label">프레임 여부</dt>
-                        <dd class="photo-metadata-value">${getBooleanLabel(metadata.add_frame, hasMetadata)}</dd>
+                        <dd class="photo-metadata-value">${getFrameOutputLabel(metadata, hasMetadata)}</dd>
                     </div>
                     <div class="photo-metadata-item">
                         <dt class="photo-metadata-label">프레임 색깔</dt>

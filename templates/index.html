@@ -318,6 +318,10 @@
             column-gap: 16px;
         }
 
+        #styleModal [hidden] {
+            display: none !important;
+        }
+
         .style-content {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -595,6 +599,15 @@
 
         .frame-preview-sheet.is-single-photo .frame-preview-photo + .frame-preview-photo {
             display: none;
+        }
+
+        .frame-preview-sheet.is-result-only .frame-preview-photo:first-child {
+            display: none;
+        }
+
+        .frame-preview-sheet.is-result-only .frame-preview-photo + .frame-preview-photo {
+            display: block;
+            margin-top: 0;
         }
 
         .frame-preview-sheet span {
@@ -1115,6 +1128,47 @@
             text-shadow: 0 8px 40px rgba(0, 0, 0, 0.48);
         }
 
+        .coin-balance-toast {
+            position: fixed;
+            right: clamp(16px, 3vw, 28px);
+            bottom: max(18px, env(safe-area-inset-bottom));
+            z-index: 20000;
+            max-width: calc(100vw - 32px);
+            min-width: 220px;
+            padding: 13px 16px;
+            border: 1px solid #444047;
+            border-radius: 10px;
+            background: #242126;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+            color: #f7f4f0;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.4;
+            letter-spacing: -0.015em;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(calc(100% + 32px));
+            pointer-events: none;
+            will-change: transform, opacity;
+            transition:
+                opacity 0.2s ease,
+                transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+                visibility 0s linear 0.32s;
+        }
+
+        .coin-balance-toast.is-visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+            transition-delay: 0s;
+        }
+
+        .coin-balance-toast.has-error {
+            border-color: #8f5b56;
+            background: #382522;
+            color: #ffe9e5;
+        }
+
         @media (max-width: 860px) {
             #styleModal {
                 align-items: flex-start;
@@ -1227,6 +1281,10 @@
 <div class="ambient ambient-1"></div>
 <div class="ambient ambient-2"></div>
 
+<div id="coinBalanceToast" class="coin-balance-toast" role="status" aria-live="polite" aria-atomic="true" aria-hidden="true">
+    <span id="coinBalanceText">입력된 코인 개수: 0개</span>
+</div>
+
 <div class="container">
     <div class="logo-section">
         <div class="logo-mark">
@@ -1263,7 +1321,7 @@
     <div class="preview-backdrop"></div>
     <div class="preview-content">
         <img id="capturedImgDisplay" src="" alt="Captured Image">
-        <p class="info-text">이 사진으로 진행할까요?<br>코인기에 코인을 넣으면 버튼이 활성화됩니다.</p>
+        <p class="info-text">이 사진으로 진행할까요?<br>계속 진행하면 코인 1개가 차감되며, 다시 찍기는 무료입니다.</p>
         <div class="btn-group">
             <button id="retakeBtn" class="btn btn-secondary" onclick="retakePhoto()">다시 찍기</button>
             <button id="btnContinue" class="btn" onclick="goToStyleSelect()" disabled>계속 진행</button>
@@ -1308,7 +1366,22 @@
                 </label>
             </div>
 
-            <div class="frame-option">
+            <div id="resultOnlyOption" class="frame-option" hidden>
+                <div class="frame-option-copy">
+                    <strong>결과물만 출력</strong>
+                    <span id="resultOnlyOptionDescription"
+                          data-enabled-text="원본은 제외하고 변환 결과 한 장에만 프레임을 적용합니다."
+                          data-frame-required-text="프레임 추가를 켜면 선택할 수 있습니다."
+                          data-unavailable-text="원본 반환은 이미 사진 한 장만 출력됩니다."
+                          data-select-text="스타일을 선택하고 프레임 추가를 켜면 사용할 수 있습니다.">스타일을 선택하고 프레임 추가를 켜면 사용할 수 있습니다.</span>
+                </div>
+                <label class="frame-toggle">
+                    <input id="resultOnlyCheckbox" type="checkbox" aria-label="결과물만 출력" aria-describedby="resultOnlyOptionDescription" disabled>
+                    <span class="frame-toggle-track" aria-hidden="true"></span>
+                </label>
+            </div>
+
+            <div id="adetailerOption" class="frame-option" hidden>
                 <div class="frame-option-copy">
                     <strong>ADetailer 얼굴 보정</strong>
                     <span id="adetailerOptionDescription"
@@ -1431,11 +1504,21 @@ const video = document.getElementById("video");
 let capturedDataURL = "";
 let captureAttemptId = 0;
 let uploadController = null;
-let captureApproved = false;
 let uploadState = "idle";
+let previewProceeding = false;
 window.currentSession = null;
 const TRANSFORM_TIMEOUT_MS = 10 * 60 * 1000;
 const TRANSFORM_POLL_INTERVAL_MS = 1500;
+const COIN_BALANCE_POLL_INTERVAL_MS = 1000;
+const COIN_NOTICE_DURATION_MS = 2600;
+const COIN_CLIENT_ID_STORAGE_KEY = "snapPocketCoinClientId";
+const COIN_CLIENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+let coinBalance = 0;
+let coinRequestSequence = 0;
+let latestAppliedCoinRequest = 0;
+let coinMutationCount = 0;
+let coinSystemAvailable = false;
+let coinNoticeTimer = null;
 const FRAME_COLOR_PREVIEWS = Object.freeze({
     clear_white: { a: "#ffffff", b: "#ffffff", text: "#282828" },
     matte_black: { a: "#121215", b: "#121215", text: "#f5f5f5" },
@@ -1449,12 +1532,202 @@ const FRAME_COLOR_PREVIEWS = Object.freeze({
     orange_navy: { a: "#f1692c", b: "#172340", text: "#ffffff" }
 });
 
+function createCoinClientId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+    }
+
+    const bytes = new Uint8Array(16);
+    if (window.crypto && typeof window.crypto.getRandomValues === "function") {
+        window.crypto.getRandomValues(bytes);
+    } else {
+        for (let index = 0; index < bytes.length; index += 1) {
+            bytes[index] = Math.floor(Math.random() * 256);
+        }
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, value => value.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function getOrCreateCoinClientId() {
+    try {
+        const storedClientId = localStorage.getItem(COIN_CLIENT_ID_STORAGE_KEY);
+        if (storedClientId && COIN_CLIENT_ID_PATTERN.test(storedClientId)) {
+            return storedClientId;
+        }
+        const newClientId = createCoinClientId();
+        localStorage.setItem(COIN_CLIENT_ID_STORAGE_KEY, newClientId);
+        return newClientId;
+    } catch (error) {
+        console.warn("Persistent client ID storage is unavailable", error);
+        return createCoinClientId();
+    }
+}
+
+const coinClientId = getOrCreateCoinClientId();
+
+function normalizeCoinBalance(value) {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function getCoinBalance() {
+    return coinBalance;
+}
+
+function notifyCoinUiChanged() {
+    if (typeof updateContinueButton === "function") updateContinueButton();
+}
+
+function hideCoinBalanceNotice() {
+    const toast = document.getElementById("coinBalanceToast");
+    toast.classList.remove("is-visible");
+    toast.setAttribute("aria-hidden", "true");
+    coinNoticeTimer = null;
+}
+
+function showCoinBalanceNotice(errorMessage = "") {
+    const toast = document.getElementById("coinBalanceToast");
+    const text = document.getElementById("coinBalanceText");
+    const hasError = Boolean(errorMessage);
+
+    text.textContent = hasError
+        ? errorMessage
+        : `입력된 코인 개수: ${getCoinBalance().toLocaleString("ko-KR")}개`;
+    toast.classList.toggle("has-error", hasError);
+    toast.classList.remove("is-visible");
+    toast.setAttribute("aria-hidden", "false");
+    void toast.offsetWidth;
+    toast.classList.add("is-visible");
+
+    if (coinNoticeTimer) clearTimeout(coinNoticeTimer);
+    coinNoticeTimer = setTimeout(hideCoinBalanceNotice, COIN_NOTICE_DURATION_MS);
+}
+
+function applyCoinBalance(nextBalance, requestId, announce = false) {
+    if (requestId < latestAppliedCoinRequest) return getCoinBalance();
+    latestAppliedCoinRequest = requestId;
+    coinBalance = normalizeCoinBalance(nextBalance);
+    coinSystemAvailable = true;
+    notifyCoinUiChanged();
+    if (announce) showCoinBalanceNotice();
+    return coinBalance;
+}
+
+function markCoinSystemUnavailable(message, requestId, announce = false) {
+    if (requestId < latestAppliedCoinRequest) return;
+    latestAppliedCoinRequest = requestId;
+    coinSystemAvailable = false;
+    notifyCoinUiChanged();
+    if (announce) showCoinBalanceNotice(message);
+}
+
+async function requestCoinApi(url, method = "GET") {
+    const options = {
+        method,
+        cache: "no-store",
+        headers: {
+            "Accept": "application/json",
+            "X-SnapPocket-Client-ID": coinClientId
+        }
+    };
+    if (method !== "GET") {
+        options.headers["Content-Type"] = "application/json";
+        options.body = "{}";
+    }
+
+    const response = await fetch(url, options);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const error = new Error(data.error || "코인 시스템에 연결하지 못했습니다.");
+        error.status = response.status;
+        error.balance = data.balance;
+        throw error;
+    }
+    return data;
+}
+
+async function refreshCoinBalance() {
+    if (coinMutationCount > 0 || document.hidden) return;
+    const requestId = ++coinRequestSequence;
+    try {
+        const data = await requestCoinApi("/coin_balance");
+        applyCoinBalance(data.balance, requestId);
+    } catch (error) {
+        console.error("Coin balance refresh failed", error);
+        markCoinSystemUnavailable("코인 시스템 연결을 확인해주세요.", requestId);
+    }
+}
+
+async function addCoin() {
+    const requestId = ++coinRequestSequence;
+    coinMutationCount += 1;
+    try {
+        const data = await requestCoinApi("/coin_balance/add", "POST");
+        applyCoinBalance(data.balance, requestId, true);
+        return true;
+    } catch (error) {
+        console.error("Coin input failed", error);
+        markCoinSystemUnavailable("코인 입력을 확인하지 못했습니다.", requestId, true);
+        return false;
+    } finally {
+        coinMutationCount -= 1;
+        if (coinMutationCount === 0) void refreshCoinBalance();
+    }
+}
+
+async function consumeCoin() {
+    const requestId = ++coinRequestSequence;
+    coinMutationCount += 1;
+    try {
+        const data = await requestCoinApi("/coin_balance/consume", "POST");
+        applyCoinBalance(data.balance, requestId);
+        return true;
+    } catch (error) {
+        if (error.status === 409) {
+            applyCoinBalance(error.balance, requestId);
+        } else {
+            console.error("Coin consumption failed", error);
+            markCoinSystemUnavailable("코인 차감 상태를 확인하지 못했습니다.", requestId);
+        }
+        return false;
+    } finally {
+        coinMutationCount -= 1;
+        if (coinMutationCount === 0) void refreshCoinBalance();
+    }
+}
+
+function isCoinShortcut(event) {
+    return event.ctrlKey && event.altKey && event.code === "KeyP";
+}
+
+function handleCoinShortcut(event) {
+    if (!isCoinShortcut(event) || event.repeat) return;
+    event.preventDefault();
+    void addCoin();
+}
+
+document.addEventListener("keydown", handleCoinShortcut);
+window.addEventListener("pageshow", () => void refreshCoinBalance());
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void refreshCoinBalance();
+});
+setInterval(() => void refreshCoinBalance(), COIN_BALANCE_POLL_INTERVAL_MS);
+void refreshCoinBalance();
+
 function getSelectedFrameColor() {
     return document.querySelector('input[name="frameColor"]:checked')?.value || "clear_white";
 }
 
 function updateContinueButton() {
     const button = document.getElementById("btnContinue");
+    if (previewProceeding) {
+        button.disabled = true;
+        button.innerText = "코인 확인 중...";
+        return;
+    }
     if (uploadState === "uploading") {
         button.disabled = true;
         button.innerText = "이미지 업로드 중...";
@@ -1466,7 +1739,12 @@ function updateContinueButton() {
         return;
     }
     button.innerText = "계속 진행";
-    button.disabled = !(captureApproved && uploadState === "success" && window.currentSession);
+    button.disabled = !(
+        coinSystemAvailable
+        && getCoinBalance() > 0
+        && uploadState === "success"
+        && window.currentSession
+    );
 }
 
 function updateFrameColorPreview() {
@@ -1479,11 +1757,15 @@ function updateFrameColorPreview() {
 
 function updateFramePreviewLayout() {
     const isOriginalReturn = document.getElementById("styleSelect").value === "none";
+    const isResultOnly = document.getElementById("resultOnlyCheckbox").checked && !isOriginalReturn;
+    const isSinglePhoto = isOriginalReturn || isResultOnly;
     const description = document.getElementById("frameOptionDescription");
-    document.getElementById("framePreviewSheet").classList.toggle("is-single-photo", isOriginalReturn);
-    description.textContent = isOriginalReturn
-        ? "원본 사진 한 장에 프레임을 적용합니다."
-        : description.dataset.collageText;
+    const previewSheet = document.getElementById("framePreviewSheet");
+    previewSheet.classList.toggle("is-single-photo", isSinglePhoto);
+    previewSheet.classList.toggle("is-result-only", isResultOnly);
+    if (isOriginalReturn) description.textContent = "원본 사진 한 장에 프레임을 적용합니다.";
+    else if (isResultOnly) description.textContent = "변환 결과 한 장에 프레임을 적용합니다.";
+    else description.textContent = description.dataset.collageText;
 }
 
 function updateFrameColorVisibility() {
@@ -1496,7 +1778,11 @@ function updateFrameColorVisibility() {
     if (isFrameEnabled) updateFrameColorPreview();
 }
 
-document.getElementById("frameCheckbox").addEventListener("change", updateFrameColorVisibility);
+document.getElementById("frameCheckbox").addEventListener("change", () => {
+    updateFrameColorVisibility();
+    updateResultOnlyAvailability();
+});
+document.getElementById("resultOnlyCheckbox").addEventListener("change", updateFramePreviewLayout);
 document.querySelectorAll('input[name="frameColor"]').forEach(input => {
     input.addEventListener("change", updateFrameColorPreview);
 });
@@ -1505,19 +1791,6 @@ navigator.mediaDevices.getUserMedia({
     video: { width: { ideal: 1920 }, height: { ideal: 1080 } } 
 })
 .then(stream => video.srcObject = stream);
-
-document.addEventListener("keydown", function(event) {
-    const previewModal = document.getElementById("previewModal");
-    const btnContinue = document.getElementById("btnContinue");
-    const retakeBtn = document.getElementById("retakeBtn");
-    
-    if (previewModal.style.display === "flex" && event.ctrlKey && event.altKey && event.code === "KeyP") {
-        event.preventDefault();
-        captureApproved = true;
-        updateContinueButton();
-        retakeBtn.disabled = true;
-    }
-});
 
 function capture() {
     document.getElementById("captureBtn").disabled = true;
@@ -1572,7 +1845,7 @@ function uploadImage(dataURL) {
     const controller = new AbortController();
     uploadController = controller;
     window.currentSession = null;
-    captureApproved = false;
+    previewProceeding = false;
     uploadState = "uploading";
     updateContinueButton();
 
@@ -1599,7 +1872,6 @@ function uploadImage(dataURL) {
         console.error("Upload failed", error);
         window.currentSession = null;
         uploadState = "error";
-        captureApproved = false;
         document.getElementById("retakeBtn").disabled = false;
         updateContinueButton();
         alert(error.message);
@@ -1617,6 +1889,7 @@ function showPreviewModal(imageSrc) {
     
     imgDisplay.src = imageSrc;
     modal.style.backgroundImage = `url('${imageSrc}')`;
+    previewProceeding = false;
     updateContinueButton();
     retakeBtn.disabled = false;
     modal.style.display = "flex";
@@ -1628,16 +1901,29 @@ function retakePhoto() {
     uploadController = null;
     window.currentSession = null;
     capturedDataURL = "";
-    captureApproved = false;
+    previewProceeding = false;
     uploadState = "idle";
     updateContinueButton();
     document.getElementById("previewModal").style.display = "none";
     document.getElementById("captureBtn").disabled = false;
 }
 
-function goToStyleSelect() {
+async function goToStyleSelect() {
+    if (previewProceeding) return;
     if (uploadState !== "success" || !window.currentSession) {
         alert("이미지 업로드가 완료될 때까지 기다려주세요.");
+        return;
+    }
+    previewProceeding = true;
+    updateContinueButton();
+    const retakeBtn = document.getElementById("retakeBtn");
+    retakeBtn.disabled = true;
+    const coinConsumed = await consumeCoin();
+    if (!coinConsumed) {
+        previewProceeding = false;
+        retakeBtn.disabled = false;
+        updateContinueButton();
+        alert("사용 가능한 코인이 없습니다. 코인 입력 상태를 확인해주세요.");
         return;
     }
     document.getElementById("previewModal").style.display = "none";
@@ -1648,39 +1934,64 @@ function goToStyleSelect() {
     document.getElementById("adetailerCheckbox").checked = false;
     updateADetailerAvailability();
     document.getElementById("frameCheckbox").checked = false;
+    document.getElementById("resultOnlyCheckbox").checked = false;
     document.querySelector('input[name="frameColor"][value="clear_white"]').checked = true;
     const previewImage = capturedDataURL ? `url('${capturedDataURL}')` : "none";
     document.getElementById("framePreviewOriginal").style.backgroundImage = previewImage;
     document.getElementById("framePreviewTransformed").style.backgroundImage = previewImage;
-    updateFramePreviewLayout();
+    updateResultOnlyAvailability();
     updateFrameColorPreview();
     updateFrameColorVisibility();
-    document.getElementById("transformBtn").disabled = true;
+    const transformBtn = document.getElementById("transformBtn");
+    transformBtn.disabled = true;
 }
 
 function checkSelections() {
     const styleValue = document.getElementById("styleSelect").value;
     const genderValue = document.getElementById("genderSelect").value;
     const transformBtn = document.getElementById("transformBtn");
-    updateFramePreviewLayout();
+    updateResultOnlyAvailability();
     updateADetailerAvailability();
-    if (styleValue && genderValue) transformBtn.disabled = false;
-    else transformBtn.disabled = true;
+    const canTransform = Boolean(styleValue && genderValue);
+    transformBtn.disabled = !canTransform;
 }
 
 function updateADetailerAvailability() {
     const styleSelect = document.getElementById("styleSelect");
     const checkbox = document.getElementById("adetailerCheckbox");
     const description = document.getElementById("adetailerOptionDescription");
+    const option = document.getElementById("adetailerOption");
     const selectedOption = styleSelect.selectedOptions[0];
     const isSupported = selectedOption?.dataset.adetailerSupported === "true";
 
     checkbox.disabled = !isSupported;
     if (!isSupported) checkbox.checked = false;
+    option.hidden = !isSupported;
 
     if (isSupported) description.textContent = description.dataset.enabledText;
     else if (styleSelect.value) description.textContent = description.dataset.unavailableText;
     else description.textContent = description.dataset.selectText;
+}
+
+function updateResultOnlyAvailability() {
+    const styleValue = document.getElementById("styleSelect").value;
+    const frameEnabled = document.getElementById("frameCheckbox").checked;
+    const checkbox = document.getElementById("resultOnlyCheckbox");
+    const description = document.getElementById("resultOnlyOptionDescription");
+    const option = document.getElementById("resultOnlyOption");
+    const isCollageOutput = Boolean(styleValue && styleValue !== "none");
+    const isAvailable = frameEnabled && isCollageOutput;
+
+    checkbox.disabled = !isAvailable;
+    if (!isAvailable) checkbox.checked = false;
+    option.hidden = !isAvailable;
+
+    if (styleValue === "none") description.textContent = description.dataset.unavailableText;
+    else if (!styleValue) description.textContent = description.dataset.selectText;
+    else if (!frameEnabled) description.textContent = description.dataset.frameRequiredText;
+    else description.textContent = description.dataset.enabledText;
+
+    updateFramePreviewLayout();
 }
 
 function setTransformOptionsDisabled(disabled) {
@@ -1689,6 +2000,8 @@ function setTransformOptionsDisabled(disabled) {
     if (disabled) document.getElementById("adetailerCheckbox").disabled = true;
     else updateADetailerAvailability();
     document.getElementById("frameCheckbox").disabled = disabled;
+    if (disabled) document.getElementById("resultOnlyCheckbox").disabled = true;
+    else updateResultOnlyAvailability();
     document.querySelectorAll('input[name="frameColor"]').forEach(input => {
         input.disabled = disabled;
     });
@@ -1761,6 +2074,9 @@ async function startTransform() {
     const gender = document.getElementById("genderSelect").value;
     const adetailerEnabled = document.getElementById("adetailerCheckbox").checked;
     const addFrame = document.getElementById("frameCheckbox").checked;
+    const resultOnly = addFrame
+        && style !== "none"
+        && document.getElementById("resultOnlyCheckbox").checked;
     const frameColor = getSelectedFrameColor();
     const payload = {
         session_id: sessionId,
@@ -1768,6 +2084,7 @@ async function startTransform() {
         gender: gender,
         adetailer_enabled: adetailerEnabled,
         add_frame: addFrame,
+        result_only: resultOnly,
         frame_color: frameColor
     };
 
@@ -1809,6 +2126,7 @@ async function startTransform() {
                     session_id: sessionId,
                     add_frame: addFrame,
                     style: style,
+                    result_only: resultOnly,
                     frame_color: frameColor
                 })
             },
