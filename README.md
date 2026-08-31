@@ -16,8 +16,9 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 
 - AI style transformation powered by Stable Diffusion and `img2img`
 - Optional branded photo frames with live color previews and ten presets
+- Per-device coin balances with prepayment, administrator locks, and remote balance controls
 - Instant attachment downloads through QR codes
-- Password-protected monitoring of captured and generated images from the admin page
+- Password-protected monitoring of devices, captures, previews, and finalized images from the admin page
 - Local-network operation with automated HTTPS access through a Cloudflare Quick Tunnel
 - Designed for festivals, weddings, brand activations, arcades, and other events
 
@@ -27,11 +28,12 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 
 | Feature | Description |
 | --- | --- |
-| Browser-based camera UI | Captures photos through a streamlined web interface and ignores stale uploads after a retake |
+| Browser-based camera UI | Waits for camera metadata, preserves the camera's full aspect ratio without cropping or stretching, and limits high-resolution captures to 2,073,600 pixels without upscaling lower-resolution cameras |
 | AI image transformation | Applies configured styles through Stable Diffusion WebUI and `img2img` |
-| Photo framing | Adds an optional date-stamped SnapPocket frame with five solid and five two-tone color presets; portrait comparisons are placed side by side |
+| Photo framing | Adds an optional date-stamped SnapPocket frame with ten color presets and supports framed original/result comparisons or result-only output |
+| Per-device coin control | Accepts prepayment from the camera or download page, consumes one coin only when a capture continues to style selection, and keeps retakes free |
 | QR delivery | Serves the finished PNG as an attachment from a scanned QR code |
-| Admin dashboard | Uses server-side session authentication and shows original and generated images in taller 4:3 previews with a full-image viewer |
+| Admin dashboard | Shows each device's first-seen time, balance, and lock state; provides remote coin controls; and replaces an intermediate transform preview with the finalized result automatically |
 | LAN and public access | Supports trusted local networks and automatically manages a temporary Cloudflare Quick Tunnel URL |
 | Folder monitoring | Detects newly generated images in real time with Watchdog |
 | Queued job processing | Uses Celery with Memurai to give each client an independent task and process GPU work sequentially |
@@ -44,11 +46,13 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 ```text
 [Camera Clients] → [Flask API] → [Celery Queue / Memurai] → [Stable Diffusion API]
        │                  │                    │                       │
-[Retake-safe Upload]  [Status Polling] ← [Task State] ← [Generated Preview]
+[Browser UUID]      [In-memory Coin State]     │              [Generated Preview]
+       │                  │                    │                       │
+[Retake-safe Upload]  [Status Polling] ← [Task State] ←───────────────┘
        │                  │
        └────────────→ [Finalize PNG + QR] → [Download Page]
                               │
-                   [Protected Admin Dashboard]
+          [Protected Admin: Devices, Coins, Preview → Final Result]
 ```
 
 ---
@@ -82,9 +86,11 @@ GPU performance directly affects image-generation time.
 
 ### Client PC
 
-- A computer capable of running a modern web browser
-- An FHD (1080p), 60 Hz or better webcam
+- A computer capable of running a modern browser with camera and `localStorage` support
+- A browser-compatible webcam of any orientation or resolution
 - Network access to the host PC or the generated Cloudflare Tunnel URL
+
+SnapPocket waits until the browser reports the camera's actual dimensions. It preserves the complete source frame without cropping, padding, or stretching. Captures at or below 2,073,600 pixels keep their native resolution; larger captures are reduced proportionally to that pixel limit.
 
 ---
 
@@ -259,11 +265,13 @@ http://192.168.0.10:5000/main_page
 
 ### 2. Connect and verify the webcam
 
-Connect the FHD webcam to the client PC, allow camera access in the browser, and confirm that the live camera preview appears correctly.
+Connect the webcam, allow camera access in the browser, and wait for the capture button to become available. Confirm that the contained preview shows the complete camera frame at its actual aspect ratio. Portrait, 4:3, widescreen, and ultrawide sources are supported.
 
-### 3. Use the keyboard shortcut instead of a coin mechanism
+### 3. Register coins before or after taking a photo
 
-When a physical coin mechanism is not connected, press `Ctrl+Alt+P` after taking a photo to provide the equivalent input.
+Press `Ctrl+Alt+P` on either the camera page or the download page whenever a coin is inserted. Coins may be registered before a photo is taken and accumulate for that browser device. The photo confirmation dialog shows the current balance; **Continue** consumes one coin, while **Retake** is free and removes the discarded capture's temporary session folder.
+
+Devices are locked by default, which means coins can be added with the keyboard shortcut only. An administrator can unlock a device from `/admin`; while the device is unlocked, an on-screen coin-add button is also available before capture begins.
 
 ### 4. Prefer HTTPS for camera access
 
@@ -301,28 +309,48 @@ Only add origins that you control and trust. This Chrome flag is a per-device de
 ### Guest Flow
 
 1. Open the camera page and allow camera access.
-2. Capture a photo. If the photo is retaken, the previous upload is cancelled and any stale response is ignored.
-3. Choose a style and optionally enable a photo frame and color preset.
-4. Wait for the AI transformation and frame composition to finish. Queue wait time is excluded, and the 10-minute limit starts when the Celery worker begins the Stable Diffusion task; a timeout or backend failure is shown as an error instead of silently returning the original photo.
-5. Scan the generated QR code to receive the PNG attachment on a mobile device.
-6. Use **Back to Start** to open `/main_page` on the same origin as the current download page. A Cloudflare download page therefore returns to the Cloudflare HTTPS camera page.
+2. Register one or more coins with `Ctrl+Alt+P` at any time on the camera or download page.
+3. Wait for camera metadata, then capture a photo. The preview uses the camera's actual aspect ratio and the mobile confirmation dialog remains scrollable.
+4. Review the remaining coin count. **Retake** is free and deletes the discarded temporary session; **Continue** atomically consumes one coin.
+5. Choose a style and gender, then enable only the available ADetailer, frame, color, and result-only options.
+6. Wait for the AI transformation and frame composition to finish. Queue wait time is excluded, and the 10-minute limit starts when the Celery worker begins the Stable Diffusion task; a timeout or backend failure is shown as an error instead of silently returning the original photo.
+7. Scan the generated QR code to receive the PNG attachment on a mobile device.
+8. Use **Back to Start** to open `/main_page` on the same origin as the current download page. A Cloudflare download page therefore returns to the Cloudflare HTTPS camera page.
+
+### Frame Output Modes
+
+| Frame | Style | Result only | Final PNG |
+| --- | --- | --- | --- |
+| Off | No transform | Not available | Original image without a SnapPocket frame |
+| Off | AI transform | Not available | AI result without a SnapPocket frame |
+| On | No transform | Not available | Framed original image |
+| On | AI transform | Off | Framed original + AI result comparison |
+| On | AI transform | On | Framed AI result only |
+
+ADetailer is hidden when the selected style does not support it. **Result only** appears only when an AI transform style and a frame are both enabled. The transform button remains visible while disabled until the required style and gender selections are complete.
 
 ### Admin Flow
 
 1. Open `/admin` on the host, LAN, or public base URL and enter the password printed by `run.bat`, or the value supplied through `SNAP_POCKET_ADMIN_PASSWORD`.
-2. Review the latest images, which are listed automatically.
-3. Select an original or generated thumbnail to inspect it in the full-image viewer.
-4. Compare original captures with generated results.
+2. Identify each connected browser by its UUID and first-seen timestamp, then review its balance and outline lock indicator.
+3. Enter the administrator password when locking or unlocking a device. Unlocking exposes that device's on-screen coin-add button; locking it again returns the device to keyboard-only coin input.
+4. Add or subtract one coin remotely. The affected camera or download page shows a green add notification or red subtract notification with the remaining balance.
+5. Review automatically sorted captures and the recorded style, gender, ADetailer, frame color, and frame output mode. Frame state is displayed as `미사용`, `사용/단일출력`, or `사용/복수출력`.
+6. Select a thumbnail to open the full image. While processing, the card is labeled `변환 미리보기`; after finalization it automatically changes to `Result` and reloads the final framed PNG without a page refresh.
 
 Administrator authentication is verified by Flask. The admin list and original `raw.png` images are unavailable without a valid session; public result downloads continue to work through their QR links.
 
 ### Reliability and Multi-device Behavior
 
 - Every browser keeps its own capture approval, upload session, and Celery task ID. One device cannot approve or overwrite another device's capture.
+- Each browser origin stores a persistent UUID in `localStorage`, so closing and reopening the window on the same origin keeps the device identity. If a Cloudflare Quick Tunnel restarts with a different hostname, the new origin may create a new device identity.
+- Coin balances, lock states, first-seen timestamps, and remote-notification history live only in the Flask server's memory. Restarting the server resets them to an empty state; a returning browser is recreated with zero coins and a locked state.
+- One Flask server process can serve multiple independent devices. Coin state is not shared across multiple Flask server processes, so this in-memory design must not be scaled with separate web workers without adding a shared state store.
+- Coin consumption and administrator balance changes use the same server lock, preventing simultaneous operations from spending the same coin or producing a negative balance.
 - The default `--pool=solo` Celery worker processes AI transformations one at a time to protect GPU stability. Additional client tasks remain in the queue.
 - Queue time in `PENDING` does not consume the transformation timeout. The 10-minute limit starts when the worker reports `STARTED`.
 - Stable Diffusion timeouts, invalid responses, queue failures, and missing result files are shown as errors. SnapPocket no longer substitutes the original photo when AI generation fails.
-- Retaking a photo aborts the previous upload and clears its session so a late response cannot become the active capture.
+- Retaking a photo aborts the previous upload, ignores late responses, and requests deletion of the discarded session's `temp` folder.
 
 ---
 
@@ -355,6 +383,7 @@ Administrator authentication is verified by Flask. The admin list and original `
 - [2026-07-28] Completely changed the design of HTML files.
 - [2026-08-04] Added configurable photo frames, orientation-aware collages, direct QR downloads, full-image previews, local watermark fonts, and automatic Cloudflare Quick Tunnel URL management.
 - [2026-08-06] Added server-side administrator sessions, explicit transform failure handling, retake race protection, queue-aware 10-minute limits, taller admin previews, and same-origin **Back to Start** navigation.
+- [2026-08-31] Added aspect-ratio-safe camera capture, prepayment and per-device in-memory coin balances, administrator device locks and remote coin controls, free retake cleanup, result-only frame output, mobile confirmation scrolling, and automatic admin preview-to-final image refresh.
 
 ---
 
