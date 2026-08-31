@@ -816,7 +816,7 @@
 
         .coin-client-list {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 10px;
         }
 
@@ -830,6 +830,10 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 10px;
             background: #18181c;
+        }
+
+        .coin-client-card.is-unlocked {
+            border-color: rgba(92, 230, 196, 0.20);
         }
 
         .coin-client-identity {
@@ -853,13 +857,130 @@
             white-space: nowrap;
         }
 
+        .coin-client-first-seen {
+            display: block;
+            margin-top: 5px;
+            color: rgba(255, 255, 255, 0.64);
+            font-size: 10px;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.4;
+            white-space: nowrap;
+        }
+
         .coin-client-balance {
             flex: none;
             min-width: 56px;
             color: #f8fafc;
             font-size: 18px;
             font-variant-numeric: tabular-nums;
-            text-align: right;
+            text-align: center;
+        }
+
+        .coin-client-controls {
+            display: flex;
+            flex: none;
+            align-items: flex-end;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .coin-client-status-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .coin-client-balance-control {
+            display: grid;
+            grid-template-columns: 32px minmax(56px, auto) 32px;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .coin-client-balance-adjust {
+            display: inline-flex;
+            width: 32px;
+            height: 32px;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 9px;
+            background: rgba(255, 255, 255, 0.055);
+            font-family: inherit;
+            font-size: 20px;
+            font-weight: 650;
+            line-height: 1;
+            cursor: pointer;
+            transition: border-color 0.18s ease, background-color 0.18s ease;
+        }
+
+        .coin-client-balance-adjust.is-add {
+            border-color: rgba(83, 224, 192, 0.30);
+            color: #79f0d3;
+        }
+
+        .coin-client-balance-adjust.is-subtract {
+            border-color: rgba(255, 107, 114, 0.30);
+            color: #ff858b;
+        }
+
+        .coin-client-balance-adjust:hover:not(:disabled) {
+            border-color: currentColor;
+            background: rgba(255, 255, 255, 0.11);
+        }
+
+        .coin-client-balance-adjust:disabled {
+            border-color: rgba(255, 255, 255, 0.07);
+            color: rgba(255, 255, 255, 0.24);
+            cursor: not-allowed;
+        }
+
+        .coin-client-lock-state {
+            display: inline-flex;
+            align-items: center;
+            justify-self: end;
+            gap: 5px;
+            color: #ff858b;
+            font-size: 11px;
+            font-weight: 750;
+        }
+
+        .coin-client-lock-state.is-unlocked {
+            color: #79f0d3;
+        }
+
+        .coin-client-lock-icon {
+            width: 17px;
+            height: 17px;
+        }
+
+        .coin-client-lock-action {
+            width: 100%;
+            min-height: 34px;
+            padding: 0 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 9px;
+            background: rgba(255, 255, 255, 0.055);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: 750;
+            cursor: pointer;
+            transition: border-color 0.18s ease, background-color 0.18s ease;
+        }
+
+        .coin-client-lock-action:hover {
+            border-color: rgba(255, 255, 255, 0.22);
+            background: rgba(255, 255, 255, 0.10);
+        }
+
+        .coin-client-lock-action:focus-visible,
+        .coin-client-balance-adjust:focus-visible,
+        .coin-lock-modal button:focus-visible,
+        .coin-lock-password:focus-visible {
+            outline: 3px solid rgba(255, 107, 69, 0.46);
+            outline-offset: 2px;
         }
 
         .coin-client-balance-unit {
@@ -877,6 +998,148 @@
             color: var(--text-muted);
             font-size: 13px;
             text-align: center;
+        }
+
+        .coin-lock-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 11000;
+            display: grid;
+            padding: 20px;
+            background: rgba(5, 4, 7, 0.82);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            place-items: center;
+            transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+        }
+
+        .coin-lock-modal.is-visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transition-delay: 0s;
+        }
+
+        .coin-lock-dialog {
+            width: min(100%, 400px);
+            padding: 26px;
+            border: 1px solid rgba(255, 255, 255, 0.13);
+            border-radius: 22px;
+            background: #18161c;
+            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.52);
+            transform: translateY(14px) scale(0.98);
+            transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .coin-lock-modal.is-visible .coin-lock-dialog {
+            transform: translateY(0) scale(1);
+        }
+
+        .coin-lock-heading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .coin-lock-heading svg {
+            width: 22px;
+            height: 22px;
+            color: var(--text-muted);
+        }
+
+        .coin-lock-heading h2 {
+            font-size: 19px;
+            letter-spacing: -0.03em;
+        }
+
+        .coin-lock-description {
+            margin-bottom: 18px;
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .coin-lock-device-id {
+            display: block;
+            margin-top: 5px;
+            overflow: hidden;
+            color: rgba(255, 250, 244, 0.72);
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+            font-size: 10px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .coin-lock-password-label {
+            display: block;
+            margin-bottom: 7px;
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 750;
+        }
+
+        .coin-lock-password {
+            width: 100%;
+            height: 46px;
+            padding: 0 13px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 11px;
+            background: rgba(0, 0, 0, 0.22);
+            color: var(--text);
+            font: inherit;
+            outline: none;
+        }
+
+        .coin-lock-password:focus {
+            border-color: var(--primary);
+        }
+
+        .coin-lock-error {
+            margin: 9px 0 0;
+            color: #ff858b;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .coin-lock-error[hidden] {
+            display: none;
+        }
+
+        .coin-lock-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .coin-lock-actions button {
+            min-height: 42px;
+            border-radius: 11px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .coin-lock-cancel {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: transparent;
+            color: var(--text-muted);
+        }
+
+        .coin-lock-submit {
+            border: 1px solid var(--primary);
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .coin-lock-submit:disabled {
+            cursor: wait;
+            opacity: 0.58;
         }
 
         @media (max-width: 680px) {
@@ -1017,8 +1280,8 @@
         <section class="coin-client-panel" aria-labelledby="coin-client-title">
             <div class="coin-client-header">
                 <div>
-                    <span class="coin-client-eyebrow">COIN BALANCE</span>
-                    <h2 id="coin-client-title" class="coin-client-title">기기별 코인 현황</h2>
+                    <span class="coin-client-eyebrow">DEVICE ACCESS</span>
+                    <h2 id="coin-client-title" class="coin-client-title">기기별 코인 및 잠금 현황</h2>
                 </div>
                 <div class="coin-client-summary" aria-live="polite">
                     <strong id="coin-client-count">0대</strong>
@@ -1046,6 +1309,23 @@
         </div>
     </div>
 
+    <div id="coin-lock-modal" class="coin-lock-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="coin-lock-title">
+        <form id="coin-lock-form" class="coin-lock-dialog">
+            <div class="coin-lock-heading">
+                <svg id="coin-lock-modal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></svg>
+                <h2 id="coin-lock-title">기기 잠금 변경</h2>
+            </div>
+            <p id="coin-lock-description" class="coin-lock-description"></p>
+            <label class="coin-lock-password-label" for="coin-lock-password">관리자 비밀번호</label>
+            <input id="coin-lock-password" class="coin-lock-password" type="password" autocomplete="current-password" required>
+            <p id="coin-lock-error" class="coin-lock-error" role="alert" hidden></p>
+            <div class="coin-lock-actions">
+                <button id="coin-lock-cancel" class="coin-lock-cancel" type="button">취소</button>
+                <button id="coin-lock-submit" class="coin-lock-submit" type="submit">변경</button>
+            </div>
+        </form>
+    </div>
+
     <script>
         let adminRefreshTimer = null;
         let liveUpdateHealthTimer = null;
@@ -1053,6 +1333,7 @@
         const ADMIN_REFRESH_TIMEOUT_MS = 10000;
         const LIVE_UPDATE_STALE_AFTER_MS = 10000;
         let lastSuccessfulAdminRefreshAt = 0;
+        let pendingCoinLockChange = null;
 
         function setLiveUpdateStatus(isOnline) {
             const indicator = document.getElementById('live-update-indicator');
@@ -1101,13 +1382,67 @@
             );
         }
 
+        function renderOutlineLock(svg, locked) {
+            const namespace = 'http://www.w3.org/2000/svg';
+            svg.replaceChildren();
+            svg.setAttribute('viewBox', '0 0 24 24');
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('stroke-width', '1.8');
+            svg.setAttribute('stroke-linecap', 'round');
+            svg.setAttribute('stroke-linejoin', 'round');
+
+            const body = document.createElementNS(namespace, 'rect');
+            body.setAttribute('x', '5');
+            body.setAttribute('y', '10');
+            body.setAttribute('width', '14');
+            body.setAttribute('height', '10');
+            body.setAttribute('rx', '2');
+
+            const shackle = document.createElementNS(namespace, 'path');
+            shackle.setAttribute(
+                'd',
+                locked ? 'M8 10V7a4 4 0 0 1 8 0v3' : 'M8 10V7a4 4 0 0 1 7.5-2'
+            );
+            svg.append(body, shackle);
+        }
+
+        function createOutlineLockIcon(locked) {
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.classList.add('coin-client-lock-icon');
+            svg.setAttribute('aria-hidden', 'true');
+            renderOutlineLock(svg, locked);
+            return svg;
+        }
+
+        function formatCoinClientFirstSeen(value) {
+            const date = new Date(value);
+            if (!value || Number.isNaN(date.getTime())) return '기록 없음';
+            const pad = number => String(number).padStart(2, '0');
+            return [
+                date.getFullYear(),
+                '-',
+                pad(date.getMonth() + 1),
+                '-',
+                pad(date.getDate()),
+                ' ',
+                pad(date.getHours()),
+                ':',
+                pad(date.getMinutes()),
+                ':',
+                pad(date.getSeconds())
+            ].join('');
+        }
+
         function updateCoinClients(coinClients = []) {
             const clients = Array.isArray(coinClients)
                 ? coinClients
                     .filter(client => typeof client?.client_id === 'string')
                     .map(client => ({
                         clientId: client.client_id,
-                        balance: Math.max(0, Number(client.balance) || 0)
+                        balance: Math.max(0, Number(client.balance) || 0),
+                        locked: client.locked !== false,
+                        firstSeen: typeof client.first_seen === 'string' ? client.first_seen : ''
                     }))
                 : [];
             const totalBalance = clients.reduce((sum, client) => sum + client.balance, 0);
@@ -1128,6 +1463,7 @@
             clients.forEach((client, index) => {
                 const card = document.createElement('article');
                 card.className = 'coin-client-card';
+                card.classList.toggle('is-unlocked', !client.locked);
 
                 const identity = document.createElement('div');
                 identity.className = 'coin-client-identity';
@@ -1141,6 +1477,11 @@
                 clientId.textContent = client.clientId;
                 clientId.title = client.clientId;
 
+                const firstSeen = document.createElement('span');
+                firstSeen.className = 'coin-client-first-seen';
+                firstSeen.textContent = `최초 접속: ${formatCoinClientFirstSeen(client.firstSeen)}`;
+                if (client.firstSeen) firstSeen.title = client.firstSeen;
+
                 const balance = document.createElement('strong');
                 balance.className = 'coin-client-balance';
                 balance.textContent = client.balance.toLocaleString('ko-KR');
@@ -1150,8 +1491,63 @@
                 unit.textContent = '개';
                 balance.appendChild(unit);
 
-                identity.append(name, clientId);
-                card.append(identity, balance);
+                const controls = document.createElement('div');
+                controls.className = 'coin-client-controls';
+
+                const statusRow = document.createElement('div');
+                statusRow.className = 'coin-client-status-row';
+
+                const lockState = document.createElement('span');
+                lockState.className = 'coin-client-lock-state';
+                lockState.classList.toggle('is-unlocked', !client.locked);
+                lockState.appendChild(createOutlineLockIcon(client.locked));
+
+                const lockStateText = document.createElement('span');
+                lockStateText.textContent = client.locked ? '잠김' : '해제됨';
+                lockState.appendChild(lockStateText);
+
+                const balanceControl = document.createElement('div');
+                balanceControl.className = 'coin-client-balance-control';
+
+                const subtractButton = document.createElement('button');
+                subtractButton.className = 'coin-client-balance-adjust is-subtract';
+                subtractButton.type = 'button';
+                subtractButton.textContent = '−';
+                subtractButton.dataset.clientId = client.clientId;
+                subtractButton.dataset.delta = '-1';
+                subtractButton.dataset.balance = String(client.balance);
+                subtractButton.dataset.deviceName = `기기 ${index + 1}`;
+                subtractButton.disabled = client.balance <= 0;
+                subtractButton.setAttribute('aria-label', `기기 ${index + 1} 코인 1개 차감`);
+
+                const addButton = document.createElement('button');
+                addButton.className = 'coin-client-balance-adjust is-add';
+                addButton.type = 'button';
+                addButton.textContent = '+';
+                addButton.dataset.clientId = client.clientId;
+                addButton.dataset.delta = '1';
+                addButton.dataset.balance = String(client.balance);
+                addButton.dataset.deviceName = `기기 ${index + 1}`;
+                addButton.setAttribute('aria-label', `기기 ${index + 1} 코인 1개 추가`);
+
+                balanceControl.append(subtractButton, balance, addButton);
+                statusRow.append(lockState, balanceControl);
+
+                const lockAction = document.createElement('button');
+                lockAction.className = 'coin-client-lock-action';
+                lockAction.type = 'button';
+                lockAction.dataset.clientId = client.clientId;
+                lockAction.dataset.targetLocked = String(!client.locked);
+                lockAction.dataset.deviceName = `기기 ${index + 1}`;
+                lockAction.textContent = client.locked ? '잠금 해제' : '다시 잠그기';
+                lockAction.setAttribute(
+                    'aria-label',
+                    `기기 ${index + 1} ${lockAction.textContent}`
+                );
+
+                identity.append(name, clientId, firstSeen);
+                controls.append(statusRow, lockAction);
+                card.append(identity, controls);
                 list.appendChild(card);
             });
         }
@@ -1227,6 +1623,14 @@
         const imageModalTitle = document.getElementById('image-modal-title');
         const imageModalClose = document.getElementById('image-modal-close');
         let lastImageTrigger = null;
+        const coinLockModal = document.getElementById('coin-lock-modal');
+        const coinLockForm = document.getElementById('coin-lock-form');
+        const coinLockModalIcon = document.getElementById('coin-lock-modal-icon');
+        const coinLockTitle = document.getElementById('coin-lock-title');
+        const coinLockDescription = document.getElementById('coin-lock-description');
+        const coinLockPassword = document.getElementById('coin-lock-password');
+        const coinLockError = document.getElementById('coin-lock-error');
+        const coinLockSubmit = document.getElementById('coin-lock-submit');
 
         function openImageModal(trigger) {
             const imageSrc = trigger.dataset.imageSrc;
@@ -1260,9 +1664,134 @@
         imageModal.addEventListener('click', function(e) {
             if (e.target === imageModal) closeImageModal();
         });
+
+        function openCoinLockModal(trigger) {
+            const clientId = trigger.dataset.clientId;
+            const targetLocked = trigger.dataset.targetLocked === 'true';
+            const deviceName = trigger.dataset.deviceName || '기기';
+            if (!clientId) return;
+
+            pendingCoinLockChange = { clientId, targetLocked, trigger };
+            renderOutlineLock(coinLockModalIcon, targetLocked);
+            coinLockTitle.textContent = targetLocked ? `${deviceName} 다시 잠그기` : `${deviceName} 잠금 해제`;
+            coinLockDescription.replaceChildren(
+                document.createTextNode(
+                    targetLocked
+                        ? '이 기기의 화면용 코인 추가 버튼을 다시 숨깁니다.'
+                        : '이 기기에서 화면의 코인 추가 버튼을 사용할 수 있게 합니다.'
+                )
+            );
+            const deviceId = document.createElement('code');
+            deviceId.className = 'coin-lock-device-id';
+            deviceId.textContent = clientId;
+            deviceId.title = clientId;
+            coinLockDescription.appendChild(deviceId);
+            coinLockPassword.value = '';
+            coinLockError.textContent = '';
+            coinLockError.hidden = true;
+            coinLockSubmit.textContent = targetLocked ? '다시 잠그기' : '잠금 해제';
+            coinLockModal.classList.add('is-visible');
+            coinLockModal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('image-modal-open');
+            requestAnimationFrame(() => coinLockPassword.focus());
+        }
+
+        function closeCoinLockModal() {
+            const trigger = pendingCoinLockChange?.trigger;
+            coinLockModal.classList.remove('is-visible');
+            coinLockModal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('image-modal-open');
+            coinLockPassword.value = '';
+            coinLockError.textContent = '';
+            coinLockError.hidden = true;
+            pendingCoinLockChange = null;
+            if (trigger?.isConnected) trigger.focus();
+        }
+
+        async function adjustRemoteCoinBalance(trigger) {
+            const clientId = trigger.dataset.clientId;
+            const delta = Number(trigger.dataset.delta);
+            if (!clientId || !Number.isInteger(delta) || ![-1, 1].includes(delta)) return;
+
+            const card = trigger.closest('.coin-client-card');
+            const adjustmentButtons = card
+                ? Array.from(card.querySelectorAll('.coin-client-balance-adjust'))
+                : [trigger];
+            let updatedBalance = Number(trigger.dataset.balance);
+            adjustmentButtons.forEach(button => { button.disabled = true; });
+
+            try {
+                const res = await fetch('/admin_coin_client_balance', {
+                    method: 'POST',
+                    cache: 'no-store',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ client_id: clientId, delta })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || '코인 잔액을 변경하지 못했습니다.');
+                updatedBalance = Math.max(0, Number(data.balance) || 0);
+                await loadData();
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                adjustmentButtons.forEach(button => {
+                    button.dataset.balance = String(updatedBalance);
+                    button.disabled = button.dataset.delta === '-1' && updatedBalance <= 0;
+                });
+            }
+        }
+
+        document.getElementById('coin-client-list').addEventListener('click', function(e) {
+            const balanceTrigger = e.target.closest('.coin-client-balance-adjust');
+            if (balanceTrigger && this.contains(balanceTrigger)) {
+                void adjustRemoteCoinBalance(balanceTrigger);
+                return;
+            }
+
+            const lockTrigger = e.target.closest('.coin-client-lock-action');
+            if (lockTrigger && this.contains(lockTrigger)) openCoinLockModal(lockTrigger);
+        });
+
+        document.getElementById('coin-lock-cancel').addEventListener('click', closeCoinLockModal);
+        coinLockModal.addEventListener('click', function(e) {
+            if (e.target === coinLockModal) closeCoinLockModal();
+        });
+
+        coinLockForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            if (!pendingCoinLockChange || !coinLockPassword.value) return;
+
+            coinLockSubmit.disabled = true;
+            coinLockError.hidden = true;
+            try {
+                const res = await fetch('/admin_coin_client_lock', {
+                    method: 'POST',
+                    cache: 'no-store',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        client_id: pendingCoinLockChange.clientId,
+                        locked: pendingCoinLockChange.targetLocked,
+                        password: coinLockPassword.value
+                    })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || '기기 잠금 상태를 변경하지 못했습니다.');
+                closeCoinLockModal();
+                void loadData();
+            } catch (error) {
+                coinLockError.textContent = error.message;
+                coinLockError.hidden = false;
+                coinLockPassword.select();
+            } finally {
+                coinLockSubmit.disabled = false;
+            }
+        });
+
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && imageModal.classList.contains('is-visible')) {
                 closeImageModal();
+            } else if (e.key === 'Escape' && coinLockModal.classList.contains('is-visible')) {
+                closeCoinLockModal();
             }
         });
 
@@ -1369,7 +1898,11 @@
         function createImageHTML(item, type) {
             const isRaw = type === 'raw';
             const url = isRaw ? item.raw_url : item.result_url;
-            const label = isRaw ? 'RAW' : 'Result';
+            const label = isRaw
+                ? 'RAW'
+                : item.result_kind === 'preview'
+                    ? '변환 미리보기'
+                    : 'Result';
             const status = STATUS_CONFIG[item.status] || STATUS_CONFIG.captured;
 
             if (!url) {
@@ -1383,7 +1916,10 @@
             }
 
             const separator = String(url).includes('?') ? '&' : '?';
-            const imageSrc = `${url}${separator}cache=${encodeURIComponent(item.timestamp)}`;
+            const imageVersion = isRaw
+                ? item.timestamp
+                : item.result_version ?? item.timestamp;
+            const imageSrc = `${url}${separator}cache=${encodeURIComponent(imageVersion)}`;
             return `
                 <button class="img-box image-open-button" type="button" data-image-src="${escapeHTML(imageSrc)}" data-image-label="${escapeHTML(label)}">
                     <div class="img-title">${escapeHTML(label)}</div>
@@ -1421,6 +1957,9 @@
                 item.status,
                 item.raw_url,
                 item.result_url,
+                item.result_kind,
+                item.result_version,
+                item.finalized,
                 item.timestamp,
                 item.metadata
             ]);

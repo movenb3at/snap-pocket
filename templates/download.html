@@ -709,6 +709,18 @@
             color: #ffe9e5;
         }
 
+        .coin-balance-toast.is-remote-add {
+            border-color: #2f7659;
+            background: #1d4a38;
+            color: #e7fff5;
+        }
+
+        .coin-balance-toast.is-remote-subtract {
+            border-color: #9a4a50;
+            background: #4a2529;
+            color: #ffecef;
+        }
+
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
                 scroll-behavior: auto !important;
@@ -812,6 +824,11 @@ let latestAppliedCoinRequest = 0;
 let coinMutationCount = 0;
 let coinSystemAvailable = false;
 let coinNoticeTimer = null;
+let remoteCoinRuntimeId = null;
+let latestRemoteCoinEventId = 0;
+let remoteCoinEventsInitialized = false;
+let remoteCoinNoticeShowing = false;
+const remoteCoinNoticeQueue = [];
 
 function createCoinClientId() {
     if (window.crypto && typeof window.crypto.randomUUID === "function") {
@@ -867,17 +884,23 @@ function hideCoinBalanceNotice() {
     toast.classList.remove("is-visible");
     toast.setAttribute("aria-hidden", "true");
     coinNoticeTimer = null;
+
+    if (remoteCoinNoticeShowing) {
+        remoteCoinNoticeShowing = false;
+        if (remoteCoinNoticeQueue.length > 0) {
+            setTimeout(showNextRemoteCoinNotice, 120);
+        }
+    }
 }
 
-function showCoinBalanceNotice(errorMessage = "") {
+function showCoinBalanceNotice(message = "", tone = message ? "error" : "default") {
     const toast = document.getElementById("coinBalanceToast");
     const text = document.getElementById("coinBalanceText");
-    const hasError = Boolean(errorMessage);
 
-    text.textContent = hasError
-        ? errorMessage
-        : `입력된 코인 개수: ${getCoinBalance().toLocaleString("ko-KR")}개`;
-    toast.classList.toggle("has-error", hasError);
+    text.textContent = message || `입력된 코인 개수: ${getCoinBalance().toLocaleString("ko-KR")}개`;
+    toast.classList.toggle("has-error", tone === "error");
+    toast.classList.toggle("is-remote-add", tone === "remote-add");
+    toast.classList.toggle("is-remote-subtract", tone === "remote-subtract");
     toast.classList.remove("is-visible");
     toast.setAttribute("aria-hidden", "false");
     void toast.offsetWidth;
@@ -887,13 +910,72 @@ function showCoinBalanceNotice(errorMessage = "") {
     coinNoticeTimer = setTimeout(hideCoinBalanceNotice, COIN_NOTICE_DURATION_MS);
 }
 
-function applyCoinBalance(nextBalance, requestId, announce = false) {
+function showNextRemoteCoinNotice() {
+    if (remoteCoinNoticeShowing || remoteCoinNoticeQueue.length === 0) return;
+    const event = remoteCoinNoticeQueue.shift();
+    const added = event.delta > 0;
+    remoteCoinNoticeShowing = true;
+    showCoinBalanceNotice(
+        `원격으로 코인 1개가 ${added ? "추가" : "차감"}되었습니다. 잔여: ${event.balance.toLocaleString("ko-KR")}개`,
+        added ? "remote-add" : "remote-subtract"
+    );
+}
+
+function syncRemoteCoinEvents(runtimeId, events) {
+    if (typeof runtimeId !== "string" || !runtimeId) return;
+    const normalizedEvents = Array.isArray(events)
+        ? events
+            .map(event => ({
+                id: Number(event?.id),
+                delta: Number(event?.delta),
+                balance: normalizeCoinBalance(event?.balance)
+            }))
+            .filter(event => (
+                Number.isSafeInteger(event.id)
+                && event.id > 0
+                && Number.isSafeInteger(event.delta)
+                && [-1, 1].includes(event.delta)
+            ))
+            .sort((left, right) => left.id - right.id)
+        : [];
+
+    if (!remoteCoinEventsInitialized) {
+        remoteCoinEventsInitialized = true;
+        remoteCoinRuntimeId = runtimeId;
+        latestRemoteCoinEventId = normalizedEvents.at(-1)?.id || 0;
+        return;
+    }
+
+    if (remoteCoinRuntimeId !== runtimeId) {
+        remoteCoinRuntimeId = runtimeId;
+        latestRemoteCoinEventId = 0;
+    }
+
+    const unseenEvents = normalizedEvents.filter(event => event.id > latestRemoteCoinEventId);
+    if (normalizedEvents.length > 0) {
+        latestRemoteCoinEventId = Math.max(
+            latestRemoteCoinEventId,
+            normalizedEvents.at(-1).id
+        );
+    }
+    remoteCoinNoticeQueue.push(...unseenEvents);
+    showNextRemoteCoinNotice();
+}
+
+function applyCoinBalance(
+    nextBalance,
+    requestId,
+    announce = false,
+    runtimeId = "",
+    remoteEvents = []
+) {
     if (requestId < latestAppliedCoinRequest) return getCoinBalance();
     latestAppliedCoinRequest = requestId;
     coinBalance = normalizeCoinBalance(nextBalance);
     coinSystemAvailable = true;
     notifyCoinUiChanged();
     if (announce) showCoinBalanceNotice();
+    syncRemoteCoinEvents(runtimeId, remoteEvents);
     return coinBalance;
 }
 
@@ -925,6 +1007,8 @@ async function requestCoinApi(url, method = "GET") {
         const error = new Error(data.error || "코인 시스템에 연결하지 못했습니다.");
         error.status = response.status;
         error.balance = data.balance;
+        error.coinRuntimeId = data.coin_runtime_id;
+        error.remoteEvents = data.remote_events;
         throw error;
     }
     return data;
@@ -935,7 +1019,13 @@ async function refreshCoinBalance() {
     const requestId = ++coinRequestSequence;
     try {
         const data = await requestCoinApi("/coin_balance");
-        applyCoinBalance(data.balance, requestId);
+        applyCoinBalance(
+            data.balance,
+            requestId,
+            false,
+            data.coin_runtime_id,
+            data.remote_events
+        );
     } catch (error) {
         console.error("Coin balance refresh failed", error);
         markCoinSystemUnavailable("코인 시스템 연결을 확인해주세요.", requestId);
@@ -947,7 +1037,13 @@ async function addCoin() {
     coinMutationCount += 1;
     try {
         const data = await requestCoinApi("/coin_balance/add", "POST");
-        applyCoinBalance(data.balance, requestId, true);
+        applyCoinBalance(
+            data.balance,
+            requestId,
+            true,
+            data.coin_runtime_id,
+            data.remote_events
+        );
         return true;
     } catch (error) {
         console.error("Coin input failed", error);
@@ -964,11 +1060,23 @@ async function consumeCoin() {
     coinMutationCount += 1;
     try {
         const data = await requestCoinApi("/coin_balance/consume", "POST");
-        applyCoinBalance(data.balance, requestId);
+        applyCoinBalance(
+            data.balance,
+            requestId,
+            false,
+            data.coin_runtime_id,
+            data.remote_events
+        );
         return true;
     } catch (error) {
         if (error.status === 409) {
-            applyCoinBalance(error.balance, requestId);
+            applyCoinBalance(
+                error.balance,
+                requestId,
+                false,
+                error.coinRuntimeId,
+                error.remoteEvents
+            );
         } else {
             console.error("Coin consumption failed", error);
             markCoinSystemUnavailable("코인 차감 상태를 확인하지 못했습니다.", requestId);

@@ -129,7 +129,8 @@
         .video-container {
             position: relative;
             width: 100%;
-            aspect-ratio: 16 / 9;
+            max-width: 100%;
+            align-self: center;
             background: #000;
             border-radius: 16px;
             overflow: hidden;
@@ -159,9 +160,12 @@
         .video-corner.br { bottom: 8px; right: 8px; border-bottom-width: 2px; border-right-width: 2px; border-radius: 0 0 4px 0; }
 
         #video {
+            display: block;
             width: 100%;
-            height: 100%;
-            object-fit: cover;
+            height: auto;
+            aspect-ratio: var(--camera-aspect-ratio, 16 / 9);
+            object-fit: contain;
+            background: #000;
             transform: scaleX(-1);
             will-change: transform;
             backface-visibility: hidden;
@@ -240,6 +244,16 @@
             background-position: center;
             background-size: cover;
             background-repeat: no-repeat;
+            align-items: flex-start;
+            overflow-y: auto;
+            overscroll-behavior-y: contain;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+            padding: 16px 12px;
+            padding-top: max(16px, env(safe-area-inset-top));
+            padding-right: max(12px, env(safe-area-inset-right));
+            padding-bottom: max(16px, env(safe-area-inset-bottom));
+            padding-left: max(12px, env(safe-area-inset-left));
         }
 
         .preview-backdrop {
@@ -256,6 +270,9 @@
             z-index: 2;
             width: 90%;
             max-width: 440px;
+            flex: 0 0 auto;
+            margin-top: auto;
+            margin-bottom: auto;
             display: flex;
             flex-direction: column;
             gap: 20px;
@@ -1056,6 +1073,35 @@
             font-weight: 600;
         }
 
+        .preview-coin-balance {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 14px;
+            border: 1px solid rgba(35, 31, 40, 0.10);
+            border-radius: 13px;
+            background: rgba(35, 31, 40, 0.045);
+        }
+
+        .preview-coin-label {
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .preview-coin-value {
+            color: var(--text);
+            font-size: 16px;
+            font-weight: 850;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .preview-coin-value.is-unavailable {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
         #styleModal {
             background: rgba(17, 14, 22, 0.74);
             backdrop-filter: blur(20px);
@@ -1128,6 +1174,48 @@
             text-shadow: 0 8px 40px rgba(0, 0, 0, 0.48);
         }
 
+        .coin-quick-add-button {
+            display: flex;
+            width: max-content;
+            min-height: 40px;
+            align-items: center;
+            gap: 7px;
+            margin: -6px 0 12px auto;
+            padding: 0 13px;
+            border: 1px solid rgba(31, 115, 83, 0.34);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.46);
+            color: #1f7353;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            transition:
+                border-color 0.18s ease,
+                background-color 0.18s ease,
+                transform 0.18s ease;
+        }
+
+        .coin-quick-add-button[hidden] {
+            display: none !important;
+        }
+
+        .coin-quick-add-button:hover {
+            border-color: rgba(31, 115, 83, 0.58);
+            background: rgba(255, 255, 255, 0.78);
+            transform: translateY(-1px);
+        }
+
+        .coin-quick-add-button:focus-visible {
+            outline: 3px solid rgba(31, 115, 83, 0.18);
+            outline-offset: 2px;
+        }
+
+        .coin-quick-add-button svg {
+            width: 17px;
+            height: 17px;
+        }
+
         .coin-balance-toast {
             position: fixed;
             right: clamp(16px, 3vw, 28px);
@@ -1167,6 +1255,18 @@
             border-color: #8f5b56;
             background: #382522;
             color: #ffe9e5;
+        }
+
+        .coin-balance-toast.is-remote-add {
+            border-color: #2f7659;
+            background: #1d4a38;
+            color: #e7fff5;
+        }
+
+        .coin-balance-toast.is-remote-subtract {
+            border-color: #9a4a50;
+            background: #4a2529;
+            color: #ffecef;
         }
 
         @media (max-width: 860px) {
@@ -1251,6 +1351,10 @@
                 border-radius: 22px;
             }
 
+            .preview-content {
+                gap: 14px;
+            }
+
             .frame-color-panel {
                 width: calc(100% - 24px);
             }
@@ -1307,7 +1411,14 @@
         </div>
     </div>
     
-    <button id="captureBtn" class="btn" onclick="capture()">
+    <button id="coinQuickAddButton" class="coin-quick-add-button" type="button" onclick="addCoinFromButton()" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5"/>
+            <path d="M12 8v8M8 12h8"/>
+        </svg>
+        코인 추가
+    </button>
+    <button id="captureBtn" class="btn" onclick="capture()" disabled aria-busy="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
             <circle cx="12" cy="13" r="4"/>
@@ -1322,6 +1433,10 @@
     <div class="preview-content">
         <img id="capturedImgDisplay" src="" alt="Captured Image">
         <p class="info-text">이 사진으로 진행할까요?<br>계속 진행하면 코인 1개가 차감되며, 다시 찍기는 무료입니다.</p>
+        <div class="preview-coin-balance" role="status" aria-live="polite" aria-atomic="true">
+            <span class="preview-coin-label">현재 남은 코인</span>
+            <strong id="previewCoinBalance" class="preview-coin-value is-unavailable">확인 중</strong>
+        </div>
         <div class="btn-group">
             <button id="retakeBtn" class="btn btn-secondary" onclick="retakePhoto()">다시 찍기</button>
             <button id="btnContinue" class="btn" onclick="goToStyleSelect()" disabled>계속 진행</button>
@@ -1501,6 +1616,8 @@
 
 <script>
 const video = document.getElementById("video");
+const videoContainer = document.querySelector(".video-container");
+const captureButton = document.getElementById("captureBtn");
 let capturedDataURL = "";
 let captureAttemptId = 0;
 let uploadController = null;
@@ -1511,6 +1628,8 @@ const TRANSFORM_TIMEOUT_MS = 10 * 60 * 1000;
 const TRANSFORM_POLL_INTERVAL_MS = 1500;
 const COIN_BALANCE_POLL_INTERVAL_MS = 1000;
 const COIN_NOTICE_DURATION_MS = 2600;
+const MAX_CAPTURE_PIXELS = 1920 * 1080;
+const MAX_PREVIEW_HEIGHT_PX = 720;
 const COIN_CLIENT_ID_STORAGE_KEY = "snapPocketCoinClientId";
 const COIN_CLIENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 let coinBalance = 0;
@@ -1519,6 +1638,14 @@ let latestAppliedCoinRequest = 0;
 let coinMutationCount = 0;
 let coinSystemAvailable = false;
 let coinNoticeTimer = null;
+let coinClientLocked = true;
+let captureFlowActive = false;
+let cameraReady = false;
+let remoteCoinRuntimeId = null;
+let latestRemoteCoinEventId = 0;
+let remoteCoinEventsInitialized = false;
+let remoteCoinNoticeShowing = false;
+const remoteCoinNoticeQueue = [];
 const FRAME_COLOR_PREVIEWS = Object.freeze({
     clear_white: { a: "#ffffff", b: "#ffffff", text: "#282828" },
     matte_black: { a: "#121215", b: "#121215", text: "#f5f5f5" },
@@ -1577,7 +1704,25 @@ function getCoinBalance() {
     return coinBalance;
 }
 
+function updateCoinQuickAddButton() {
+    const button = document.getElementById("coinQuickAddButton");
+    button.hidden = coinClientLocked || captureFlowActive || !coinSystemAvailable;
+}
+
+function updatePreviewCoinBalance() {
+    const value = document.getElementById("previewCoinBalance");
+    if (!coinSystemAvailable) {
+        value.textContent = "확인 중";
+        value.classList.add("is-unavailable");
+        return;
+    }
+    value.textContent = `${getCoinBalance().toLocaleString("ko-KR")}개`;
+    value.classList.remove("is-unavailable");
+}
+
 function notifyCoinUiChanged() {
+    updateCoinQuickAddButton();
+    updatePreviewCoinBalance();
     if (typeof updateContinueButton === "function") updateContinueButton();
 }
 
@@ -1586,17 +1731,23 @@ function hideCoinBalanceNotice() {
     toast.classList.remove("is-visible");
     toast.setAttribute("aria-hidden", "true");
     coinNoticeTimer = null;
+
+    if (remoteCoinNoticeShowing) {
+        remoteCoinNoticeShowing = false;
+        if (remoteCoinNoticeQueue.length > 0) {
+            setTimeout(showNextRemoteCoinNotice, 120);
+        }
+    }
 }
 
-function showCoinBalanceNotice(errorMessage = "") {
+function showCoinBalanceNotice(message = "", tone = message ? "error" : "default") {
     const toast = document.getElementById("coinBalanceToast");
     const text = document.getElementById("coinBalanceText");
-    const hasError = Boolean(errorMessage);
 
-    text.textContent = hasError
-        ? errorMessage
-        : `입력된 코인 개수: ${getCoinBalance().toLocaleString("ko-KR")}개`;
-    toast.classList.toggle("has-error", hasError);
+    text.textContent = message || `입력된 코인 개수: ${getCoinBalance().toLocaleString("ko-KR")}개`;
+    toast.classList.toggle("has-error", tone === "error");
+    toast.classList.toggle("is-remote-add", tone === "remote-add");
+    toast.classList.toggle("is-remote-subtract", tone === "remote-subtract");
     toast.classList.remove("is-visible");
     toast.setAttribute("aria-hidden", "false");
     void toast.offsetWidth;
@@ -1606,13 +1757,74 @@ function showCoinBalanceNotice(errorMessage = "") {
     coinNoticeTimer = setTimeout(hideCoinBalanceNotice, COIN_NOTICE_DURATION_MS);
 }
 
-function applyCoinBalance(nextBalance, requestId, announce = false) {
+function showNextRemoteCoinNotice() {
+    if (remoteCoinNoticeShowing || remoteCoinNoticeQueue.length === 0) return;
+    const event = remoteCoinNoticeQueue.shift();
+    const added = event.delta > 0;
+    remoteCoinNoticeShowing = true;
+    showCoinBalanceNotice(
+        `원격으로 코인 1개가 ${added ? "추가" : "차감"}되었습니다. 잔여: ${event.balance.toLocaleString("ko-KR")}개`,
+        added ? "remote-add" : "remote-subtract"
+    );
+}
+
+function syncRemoteCoinEvents(runtimeId, events) {
+    if (typeof runtimeId !== "string" || !runtimeId) return;
+    const normalizedEvents = Array.isArray(events)
+        ? events
+            .map(event => ({
+                id: Number(event?.id),
+                delta: Number(event?.delta),
+                balance: normalizeCoinBalance(event?.balance)
+            }))
+            .filter(event => (
+                Number.isSafeInteger(event.id)
+                && event.id > 0
+                && Number.isSafeInteger(event.delta)
+                && [-1, 1].includes(event.delta)
+            ))
+            .sort((left, right) => left.id - right.id)
+        : [];
+
+    if (!remoteCoinEventsInitialized) {
+        remoteCoinEventsInitialized = true;
+        remoteCoinRuntimeId = runtimeId;
+        latestRemoteCoinEventId = normalizedEvents.at(-1)?.id || 0;
+        return;
+    }
+
+    if (remoteCoinRuntimeId !== runtimeId) {
+        remoteCoinRuntimeId = runtimeId;
+        latestRemoteCoinEventId = 0;
+    }
+
+    const unseenEvents = normalizedEvents.filter(event => event.id > latestRemoteCoinEventId);
+    if (normalizedEvents.length > 0) {
+        latestRemoteCoinEventId = Math.max(
+            latestRemoteCoinEventId,
+            normalizedEvents.at(-1).id
+        );
+    }
+    remoteCoinNoticeQueue.push(...unseenEvents);
+    showNextRemoteCoinNotice();
+}
+
+function applyCoinBalance(
+    nextBalance,
+    requestId,
+    announce = false,
+    locked = true,
+    runtimeId = "",
+    remoteEvents = []
+) {
     if (requestId < latestAppliedCoinRequest) return getCoinBalance();
     latestAppliedCoinRequest = requestId;
     coinBalance = normalizeCoinBalance(nextBalance);
+    coinClientLocked = locked !== false;
     coinSystemAvailable = true;
     notifyCoinUiChanged();
     if (announce) showCoinBalanceNotice();
+    syncRemoteCoinEvents(runtimeId, remoteEvents);
     return coinBalance;
 }
 
@@ -1620,6 +1832,7 @@ function markCoinSystemUnavailable(message, requestId, announce = false) {
     if (requestId < latestAppliedCoinRequest) return;
     latestAppliedCoinRequest = requestId;
     coinSystemAvailable = false;
+    coinClientLocked = true;
     notifyCoinUiChanged();
     if (announce) showCoinBalanceNotice(message);
 }
@@ -1644,6 +1857,9 @@ async function requestCoinApi(url, method = "GET") {
         const error = new Error(data.error || "코인 시스템에 연결하지 못했습니다.");
         error.status = response.status;
         error.balance = data.balance;
+        error.locked = data.locked;
+        error.coinRuntimeId = data.coin_runtime_id;
+        error.remoteEvents = data.remote_events;
         throw error;
     }
     return data;
@@ -1654,7 +1870,14 @@ async function refreshCoinBalance() {
     const requestId = ++coinRequestSequence;
     try {
         const data = await requestCoinApi("/coin_balance");
-        applyCoinBalance(data.balance, requestId);
+        applyCoinBalance(
+            data.balance,
+            requestId,
+            false,
+            data.locked,
+            data.coin_runtime_id,
+            data.remote_events
+        );
     } catch (error) {
         console.error("Coin balance refresh failed", error);
         markCoinSystemUnavailable("코인 시스템 연결을 확인해주세요.", requestId);
@@ -1666,7 +1889,14 @@ async function addCoin() {
     coinMutationCount += 1;
     try {
         const data = await requestCoinApi("/coin_balance/add", "POST");
-        applyCoinBalance(data.balance, requestId, true);
+        applyCoinBalance(
+            data.balance,
+            requestId,
+            true,
+            data.locked,
+            data.coin_runtime_id,
+            data.remote_events
+        );
         return true;
     } catch (error) {
         console.error("Coin input failed", error);
@@ -1683,11 +1913,25 @@ async function consumeCoin() {
     coinMutationCount += 1;
     try {
         const data = await requestCoinApi("/coin_balance/consume", "POST");
-        applyCoinBalance(data.balance, requestId);
+        applyCoinBalance(
+            data.balance,
+            requestId,
+            false,
+            data.locked,
+            data.coin_runtime_id,
+            data.remote_events
+        );
         return true;
     } catch (error) {
         if (error.status === 409) {
-            applyCoinBalance(error.balance, requestId);
+            applyCoinBalance(
+                error.balance,
+                requestId,
+                false,
+                error.locked,
+                error.coinRuntimeId,
+                error.remoteEvents
+            );
         } else {
             console.error("Coin consumption failed", error);
             markCoinSystemUnavailable("코인 차감 상태를 확인하지 못했습니다.", requestId);
@@ -1706,6 +1950,11 @@ function isCoinShortcut(event) {
 function handleCoinShortcut(event) {
     if (!isCoinShortcut(event) || event.repeat) return;
     event.preventDefault();
+    void addCoin();
+}
+
+function addCoinFromButton() {
+    if (coinClientLocked || captureFlowActive) return;
     void addCoin();
 }
 
@@ -1787,13 +2036,126 @@ document.querySelectorAll('input[name="frameColor"]').forEach(input => {
     input.addEventListener("change", updateFrameColorPreview);
 });
 
-navigator.mediaDevices.getUserMedia({ 
-    video: { width: { ideal: 1920 }, height: { ideal: 1080 } } 
-})
-.then(stream => video.srcObject = stream);
+function getCameraSourceDimensions() {
+    const width = Math.floor(Number(video.videoWidth));
+    const height = Math.floor(Number(video.videoHeight));
+    if (!Number.isSafeInteger(width) || width <= 0) return null;
+    if (!Number.isSafeInteger(height) || height <= 0) return null;
+    return { width, height };
+}
+
+function calculateCaptureDimensions(sourceWidth, sourceHeight) {
+    const width = Math.floor(Number(sourceWidth));
+    const height = Math.floor(Number(sourceHeight));
+    if (!Number.isSafeInteger(width) || width <= 0) return null;
+    if (!Number.isSafeInteger(height) || height <= 0) return null;
+
+    const sourcePixels = width * height;
+    const scale = sourcePixels > MAX_CAPTURE_PIXELS
+        ? Math.sqrt(MAX_CAPTURE_PIXELS / sourcePixels)
+        : 1;
+    return {
+        width: Math.max(1, Math.floor(width * scale)),
+        height: Math.max(1, Math.floor(height * scale)),
+        scale
+    };
+}
+
+function setCameraReady(ready) {
+    cameraReady = ready === true;
+    captureButton.setAttribute("aria-busy", String(!cameraReady));
+    if (!captureFlowActive) captureButton.disabled = !cameraReady;
+}
+
+function getPreviewAvailableWidth() {
+    const parent = videoContainer.parentElement;
+    if (!parent) return Math.max(1, window.innerWidth);
+    const style = window.getComputedStyle(parent);
+    const horizontalPadding = (parseFloat(style.paddingLeft) || 0)
+        + (parseFloat(style.paddingRight) || 0);
+    return Math.max(1, parent.clientWidth - horizontalPadding);
+}
+
+function getCameraFrameInsets() {
+    const style = window.getComputedStyle(videoContainer);
+    return {
+        horizontal: (parseFloat(style.borderLeftWidth) || 0)
+            + (parseFloat(style.borderRightWidth) || 0),
+        vertical: (parseFloat(style.borderTopWidth) || 0)
+            + (parseFloat(style.borderBottomWidth) || 0)
+    };
+}
+
+function updateCameraPreviewLayout() {
+    const source = getCameraSourceDimensions();
+    if (!source) return false;
+
+    const aspectRatio = source.width / source.height;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const maxPreviewHeight = Math.max(
+        180,
+        Math.min(MAX_PREVIEW_HEIGHT_PX, viewportHeight * 0.68)
+    );
+    const frameInsets = getCameraFrameInsets();
+    const availableWidth = getPreviewAvailableWidth();
+    const maxVideoWidth = Math.max(1, availableWidth - frameInsets.horizontal);
+    const maxVideoHeight = Math.max(1, maxPreviewHeight - frameInsets.vertical);
+    const videoWidth = Math.min(
+        maxVideoWidth,
+        maxVideoHeight * aspectRatio
+    );
+    videoContainer.style.setProperty(
+        "--camera-aspect-ratio",
+        `${source.width} / ${source.height}`
+    );
+    const containerWidth = Math.min(
+        availableWidth,
+        videoWidth + frameInsets.horizontal
+    );
+    videoContainer.style.width = `${Math.max(1, Math.floor(containerWidth))}px`;
+    return true;
+}
+
+function handleCameraDimensionsChanged() {
+    setCameraReady(updateCameraPreviewLayout());
+}
+
+video.addEventListener("loadedmetadata", handleCameraDimensionsChanged);
+video.addEventListener("resize", handleCameraDimensionsChanged);
+window.addEventListener("resize", updateCameraPreviewLayout);
+window.visualViewport?.addEventListener("resize", updateCameraPreviewLayout);
+
+if (!navigator.mediaDevices?.getUserMedia) {
+    console.error("Camera API is unavailable in this browser.");
+    setCameraReady(false);
+} else {
+    navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1920 }, height: { ideal: 1080 } }
+    })
+    .then(stream => {
+        video.srcObject = stream;
+        stream.getVideoTracks().forEach(track => {
+            track.addEventListener("ended", () => setCameraReady(false));
+        });
+        if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+            handleCameraDimensionsChanged();
+        }
+    })
+    .catch(error => {
+        console.error("Camera access failed", error);
+        setCameraReady(false);
+    });
+}
 
 function capture() {
-    document.getElementById("captureBtn").disabled = true;
+    if (!cameraReady || !getCameraSourceDimensions()) {
+        setCameraReady(false);
+        alert("카메라가 준비될 때까지 잠시 기다려주세요.");
+        return;
+    }
+    captureFlowActive = true;
+    updateCoinQuickAddButton();
+    captureButton.disabled = true;
     startCountdown();
 }
 
@@ -1827,11 +2189,35 @@ function startCountdown() {
 function takePhoto() {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
-    canvas.width = 1920;
-    canvas.height = 1080;
+    const source = getCameraSourceDimensions();
+    const captureSize = source
+        ? calculateCaptureDimensions(source.width, source.height)
+        : null;
+    if (!source || !captureSize) {
+        setCameraReady(false);
+        captureFlowActive = false;
+        updateCoinQuickAddButton();
+        alert("카메라 해상도를 확인하지 못했습니다. 다시 시도해주세요.");
+        return;
+    }
+
+    canvas.width = captureSize.width;
+    canvas.height = captureSize.height;
+    ctx.save();
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(
+        video,
+        0,
+        0,
+        source.width,
+        source.height,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+    ctx.restore();
     capturedDataURL = canvas.toDataURL("image/png");
     uploadImage(capturedDataURL);
     showPreviewModal(capturedDataURL);
@@ -1843,8 +2229,9 @@ function uploadImage(dataURL) {
     if (uploadController) uploadController.abort();
 
     const controller = new AbortController();
+    const sessionId = createCoinClientId();
     uploadController = controller;
-    window.currentSession = null;
+    window.currentSession = sessionId;
     previewProceeding = false;
     uploadState = "uploading";
     updateContinueButton();
@@ -1852,7 +2239,7 @@ function uploadImage(dataURL) {
     fetch("/upload_temp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataURL }),
+        body: JSON.stringify({ image: dataURL, session_id: sessionId }),
         signal: controller.signal
     })
     .then(async res => {
@@ -1862,7 +2249,7 @@ function uploadImage(dataURL) {
     })
     .then(data => {
         if (attemptId !== captureAttemptId) return;
-        if (!data.session_id) throw new Error("촬영 세션을 만들지 못했습니다.");
+        if (data.session_id !== sessionId) throw new Error("촬영 세션을 만들지 못했습니다.");
         window.currentSession = data.session_id;
         uploadState = "success";
         updateContinueButton();
@@ -1870,7 +2257,7 @@ function uploadImage(dataURL) {
     .catch(error => {
         if (error.name === "AbortError" || attemptId !== captureAttemptId) return;
         console.error("Upload failed", error);
-        window.currentSession = null;
+        window.currentSession = sessionId;
         uploadState = "error";
         document.getElementById("retakeBtn").disabled = false;
         updateContinueButton();
@@ -1891,11 +2278,32 @@ function showPreviewModal(imageSrc) {
     modal.style.backgroundImage = `url('${imageSrc}')`;
     previewProceeding = false;
     updateContinueButton();
+    updatePreviewCoinBalance();
     retakeBtn.disabled = false;
     modal.style.display = "flex";
+    void refreshCoinBalance();
+}
+
+async function discardTempSession(sessionId) {
+    try {
+        const response = await fetch("/discard_temp", {
+            method: "POST",
+            cache: "no-store",
+            keepalive: true,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId })
+        });
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || "임시 촬영 폴더를 삭제하지 못했습니다.");
+        }
+    } catch (error) {
+        console.error("Temporary session cleanup failed", error);
+    }
 }
 
 function retakePhoto() {
+    const sessionId = window.currentSession;
     captureAttemptId += 1;
     if (uploadController) uploadController.abort();
     uploadController = null;
@@ -1905,7 +2313,10 @@ function retakePhoto() {
     uploadState = "idle";
     updateContinueButton();
     document.getElementById("previewModal").style.display = "none";
-    document.getElementById("captureBtn").disabled = false;
+    captureFlowActive = false;
+    captureButton.disabled = !cameraReady;
+    updateCoinQuickAddButton();
+    if (sessionId) void discardTempSession(sessionId);
 }
 
 async function goToStyleSelect() {

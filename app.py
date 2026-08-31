@@ -66,7 +66,14 @@ celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
 celery.conf.update(app.config)
 
 _coin_balances_by_client = {}
+_coin_lock_states_by_client = {}
+_coin_first_seen_by_client = {}
+_coin_remote_events_by_client = {}
+_coin_remote_event_sequences_by_client = {}
+_coin_runtime_id = uuid.uuid4().hex
 _coin_balance_lock = Lock()
+_temp_session_lock = Lock()
+_discarded_temp_sessions = {}
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -124,6 +131,26 @@ def _get_session_folder(session_id):
     return session_folder
 
 
+def _normalize_temp_session_id(session_id):
+    if not isinstance(session_id, str) or not session_id:
+        return None
+    try:
+        return str(uuid.UUID(session_id))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _prune_discarded_temp_sessions():
+    cutoff = time.monotonic() - 600
+    expired_session_ids = [
+        session_id
+        for session_id, discarded_at in _discarded_temp_sessions.items()
+        if discarded_at < cutoff
+    ]
+    for session_id in expired_session_ids:
+        _discarded_temp_sessions.pop(session_id, None)
+
+
 def _write_transform_status(session_id, status, **details):
     if status not in TRANSFORM_STATUSES:
         raise ValueError(f"Unsupported transform status: {status}")
@@ -145,6 +172,13 @@ def is_admin_authenticated():
     return session.get("admin_authenticated") is True
 
 
+def _admin_password_matches(password):
+    if not isinstance(password, str) or not password:
+        return False
+    password_digest = hashlib.sha256(password.encode("utf-8")).digest()
+    return secrets.compare_digest(password_digest, ADMIN_PASSWORD_DIGEST)
+
+
 def admin_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
@@ -161,25 +195,62 @@ def _coin_balance_response(payload, status=200):
     return response
 
 
-def _get_coin_client_id():
-    raw_client_id = request.headers.get("X-SnapPocket-Client-ID", "").strip()
+def _normalize_coin_client_id(raw_client_id):
     try:
-        return uuid.UUID(raw_client_id).hex
+        return uuid.UUID(str(raw_client_id).strip()).hex
     except (AttributeError, TypeError, ValueError):
         return None
 
 
-def _get_coin_balance(client_id):
+def _get_coin_client_id():
+    return _normalize_coin_client_id(
+        request.headers.get("X-SnapPocket-Client-ID", "")
+    )
+
+
+def _get_coin_client_state_unlocked(client_id):
+    balance = _coin_balances_by_client.setdefault(client_id, 0)
+    locked = _coin_lock_states_by_client.setdefault(client_id, True)
+    first_seen = _coin_first_seen_by_client.setdefault(
+        client_id,
+        datetime.now().astimezone().isoformat(timespec="seconds")
+    )
+    remote_events = [
+        dict(event)
+        for event in _coin_remote_events_by_client.get(client_id, [])
+    ]
+    return {
+        "balance": balance,
+        "locked": locked,
+        "first_seen": first_seen,
+        "coin_runtime_id": _coin_runtime_id,
+        "remote_events": remote_events
+    }
+
+
+def _get_coin_client_state(client_id):
     with _coin_balance_lock:
-        return _coin_balances_by_client.setdefault(client_id, 0)
+        return _get_coin_client_state_unlocked(client_id)
 
 
 def _get_coin_balances_snapshot():
     with _coin_balance_lock:
-        return [
-            {"client_id": client_id, "balance": balance}
-            for client_id, balance in sorted(_coin_balances_by_client.items())
-        ]
+        clients = []
+        for client_id, balance in _coin_balances_by_client.items():
+            first_seen = _coin_first_seen_by_client.setdefault(
+                client_id,
+                datetime.now().astimezone().isoformat(timespec="seconds")
+            )
+            clients.append({
+                "client_id": client_id,
+                "balance": balance,
+                "locked": _coin_lock_states_by_client.setdefault(client_id, True),
+                "first_seen": first_seen
+            })
+        return sorted(
+            clients,
+            key=lambda client: (client["first_seen"], client["client_id"])
+        )
 
 
 @app.route("/coin_balance", methods=["GET"])
@@ -189,7 +260,7 @@ def coin_balance():
         return _coin_balance_response({
             "error": "유효한 클라이언트 ID가 필요합니다."
         }, 400)
-    return _coin_balance_response({"balance": _get_coin_balance(client_id)})
+    return _coin_balance_response(_get_coin_client_state(client_id))
 
 
 @app.route("/coin_balance/add", methods=["POST"])
@@ -206,7 +277,8 @@ def add_coin():
     with _coin_balance_lock:
         balance = _coin_balances_by_client.get(client_id, 0) + 1
         _coin_balances_by_client[client_id] = balance
-    return _coin_balance_response({"balance": balance})
+        payload = _get_coin_client_state_unlocked(client_id)
+    return _coin_balance_response(payload)
 
 
 @app.route("/coin_balance/consume", methods=["POST"])
@@ -223,13 +295,14 @@ def consume_coin():
     with _coin_balance_lock:
         balance = _coin_balances_by_client.get(client_id, 0)
         if balance <= 0:
-            return _coin_balance_response({
-                "error": "사용 가능한 코인이 없습니다.",
-                "balance": 0
-            }, 409)
-        balance -= 1
-        _coin_balances_by_client[client_id] = balance
-    return _coin_balance_response({"balance": balance})
+            payload = _get_coin_client_state_unlocked(client_id)
+            payload["error"] = "사용 가능한 코인이 없습니다."
+            status = 409
+        else:
+            _coin_balances_by_client[client_id] = balance - 1
+            payload = _get_coin_client_state_unlocked(client_id)
+            status = 200
+    return _coin_balance_response(payload, status)
 
 # 메인 페이지
 @app.route("/main_page")
@@ -247,13 +320,97 @@ def admin_login():
     if not isinstance(password, str) or not password:
         return jsonify({"error": "비밀번호를 입력해주세요."}), 400
 
-    password_digest = hashlib.sha256(password.encode("utf-8")).digest()
-    if not secrets.compare_digest(password_digest, ADMIN_PASSWORD_DIGEST):
+    if not _admin_password_matches(password):
         return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 401
 
     session.clear()
     session["admin_authenticated"] = True
     return jsonify({"ok": True})
+
+
+@app.route("/admin_coin_client_lock", methods=["POST"])
+@admin_required
+def admin_coin_client_lock():
+    data = request.get_json(silent=True) or {}
+    if not _admin_password_matches(data.get("password")):
+        return _coin_balance_response({
+            "error": "비밀번호가 일치하지 않습니다."
+        }, 401)
+
+    client_id = _normalize_coin_client_id(data.get("client_id"))
+    if client_id is None:
+        return _coin_balance_response({
+            "error": "유효한 클라이언트 ID가 필요합니다."
+        }, 400)
+
+    locked = data.get("locked")
+    if not isinstance(locked, bool):
+        return _coin_balance_response({
+            "error": "잠금 상태가 올바르지 않습니다."
+        }, 400)
+
+    with _coin_balance_lock:
+        if client_id not in _coin_balances_by_client:
+            return _coin_balance_response({
+                "error": "해당 기기를 찾을 수 없습니다."
+            }, 404)
+        _coin_lock_states_by_client[client_id] = locked
+        balance = _coin_balances_by_client[client_id]
+
+    return _coin_balance_response({
+        "client_id": client_id,
+        "balance": balance,
+        "locked": locked
+    })
+
+
+@app.route("/admin_coin_client_balance", methods=["POST"])
+@admin_required
+def admin_coin_client_balance():
+    data = request.get_json(silent=True) or {}
+    client_id = _normalize_coin_client_id(data.get("client_id"))
+    if client_id is None:
+        return _coin_balance_response({
+            "error": "유효한 클라이언트 ID가 필요합니다."
+        }, 400)
+
+    delta = data.get("delta")
+    if type(delta) is not int or delta not in (-1, 1):
+        return _coin_balance_response({
+            "error": "코인은 한 번에 1개씩만 조정할 수 있습니다."
+        }, 400)
+
+    with _coin_balance_lock:
+        if client_id not in _coin_balances_by_client:
+            return _coin_balance_response({
+                "error": "해당 기기를 찾을 수 없습니다."
+            }, 404)
+
+        balance = _coin_balances_by_client[client_id]
+        if balance + delta < 0:
+            payload = _get_coin_client_state_unlocked(client_id)
+            payload.update({
+                "client_id": client_id,
+                "error": "코인 잔액은 0개보다 작아질 수 없습니다."
+            })
+            status = 409
+        else:
+            balance += delta
+            _coin_balances_by_client[client_id] = balance
+            sequence = _coin_remote_event_sequences_by_client.get(client_id, 0) + 1
+            _coin_remote_event_sequences_by_client[client_id] = sequence
+            remote_events = _coin_remote_events_by_client.setdefault(client_id, [])
+            remote_events.append({
+                "id": sequence,
+                "delta": delta,
+                "balance": balance
+            })
+            del remote_events[:-50]
+            payload = _get_coin_client_state_unlocked(client_id)
+            payload["client_id"] = client_id
+            status = 200
+
+    return _coin_balance_response(payload, status)
 
 
 # 관리자 페이지 데이터
@@ -276,9 +433,25 @@ def admin_data():
         raw_path = os.path.join(session_path, "raw.png")
         public_result_path = os.path.join(PUBLIC_DIR, folder, "result.png")
         preview_path = os.path.join(PREVIEW_DIR, f"{session_id}.png")
-        result_available = (
-            os.path.isfile(public_result_path)
-            or os.path.isfile(preview_path)
+        finalized = os.path.isfile(public_result_path)
+        preview_available = os.path.isfile(preview_path)
+        if finalized:
+            result_kind = "final"
+            result_path = public_result_path
+            result_url = f"/public/{folder}/result.png"
+        elif preview_available:
+            result_kind = "preview"
+            result_path = preview_path
+            result_url = f"/admin_session_image/{session_id}/preview"
+        else:
+            result_kind = None
+            result_path = None
+            result_url = None
+        result_available = result_path is not None
+        result_version = (
+            os.stat(result_path).st_mtime_ns
+            if result_path is not None
+            else None
         )
         timestamp_source = raw_path if os.path.isfile(raw_path) else session_path
         timestamp = os.path.getmtime(timestamp_source)
@@ -302,16 +475,15 @@ def admin_data():
             "timestamp": timestamp,
             "status": status,
             "metadata": metadata,
+            "result_kind": result_kind,
+            "result_version": result_version,
+            "finalized": finalized,
             "raw_url": (
                 f"/admin_session_image/{session_id}/raw"
                 if os.path.isfile(raw_path)
                 else None
             ),
-            "result_url": (
-                f"/admin_session_image/{session_id}/result"
-                if result_available
-                else None
-            )
+            "result_url": result_url
         })
 
     for folder in os.listdir(PUBLIC_DIR):
@@ -332,6 +504,9 @@ def admin_data():
             "metadata": _load_json_object(
                 os.path.join(METADATA_DIR, f"{folder}.json")
             ),
+            "result_kind": "final",
+            "result_version": os.stat(result_path).st_mtime_ns,
+            "finalized": True,
             "raw_url": f"/public/{folder}/raw.png" if os.path.isfile(raw_path) else None,
             "result_url": f"/public/{folder}/result.png"
         })
@@ -607,21 +782,67 @@ def create_framed_photo(
 # 사진 업로드 (임시 저장)
 @app.route("/upload_temp", methods=["POST"])
 def upload_temp():
-    data = request.json
-    img_b64 = data["image"]
-    
-    session_id = str(uuid.uuid4())
-    session_folder = os.path.join(TEMP_DIR, session_id)
-    os.makedirs(session_folder, exist_ok=True)
+    data = request.get_json(silent=True) or {}
+    img_b64 = data.get("image")
+    requested_session_id = data.get("session_id")
+    if not isinstance(img_b64, str) or "," not in img_b64:
+        return jsonify({"error": "업로드할 이미지가 올바르지 않습니다."}), 400
 
-    img_data = img_b64.split(",")[1]
-    img_path = os.path.join(session_folder, "raw.png")
-    with open(img_path, "wb") as f:
-        f.write(base64.b64decode(img_data))
+    if requested_session_id is None:
+        session_id = str(uuid.uuid4())
+    else:
+        session_id = _normalize_temp_session_id(requested_session_id)
+        if session_id is None:
+            return jsonify({"error": "촬영 세션 ID가 올바르지 않습니다."}), 400
 
-    _write_transform_status(session_id, "captured")
+    session_folder = _get_session_folder(session_id)
+    if session_folder is None:
+        return jsonify({"error": "촬영 세션 경로가 올바르지 않습니다."}), 400
+
+    with _temp_session_lock:
+        _prune_discarded_temp_sessions()
+        if session_id in _discarded_temp_sessions:
+            _discarded_temp_sessions.pop(session_id, None)
+            return jsonify({"error": "다시 찍기로 취소된 촬영입니다."}), 409
+        if os.path.exists(session_folder):
+            return jsonify({"error": "이미 존재하는 촬영 세션입니다."}), 409
+
+        try:
+            os.makedirs(session_folder)
+            img_data = img_b64.split(",", 1)[1]
+            img_path = os.path.join(session_folder, "raw.png")
+            with open(img_path, "wb") as f:
+                f.write(base64.b64decode(img_data))
+            _write_transform_status(session_id, "captured")
+        except Exception:
+            shutil.rmtree(session_folder, ignore_errors=True)
+            raise
 
     return jsonify({"session_id": session_id})
+
+
+@app.route("/discard_temp", methods=["POST"])
+def discard_temp():
+    data = request.get_json(silent=True) or {}
+    session_id = _normalize_temp_session_id(data.get("session_id"))
+    if session_id is None:
+        return jsonify({"error": "촬영 세션 ID가 올바르지 않습니다."}), 400
+
+    session_folder = _get_session_folder(session_id)
+    if session_folder is None:
+        return jsonify({"error": "촬영 세션 경로가 올바르지 않습니다."}), 400
+
+    with _temp_session_lock:
+        _prune_discarded_temp_sessions()
+        if os.path.isdir(session_folder):
+            shutil.rmtree(session_folder)
+            _discarded_temp_sessions.pop(session_id, None)
+            deleted = True
+        else:
+            _discarded_temp_sessions[session_id] = time.monotonic()
+            deleted = False
+
+    return jsonify({"session_id": session_id, "deleted": deleted})
 
 # 변환 처리
 def _run_transform_task(session_id, style_key, gender, adetailer_enabled, overrides):
@@ -1033,12 +1254,16 @@ def serve_image(folder, filename):
 def admin_session_image(session_id, image_type):
     if image_type == "raw":
         return send_from_directory(TEMP_DIR, f"{session_id}/raw.png")
+    if image_type == "preview":
+        response = send_from_directory(PREVIEW_DIR, f"{session_id}.png")
+        response.headers["Cache-Control"] = "no-store"
+        return response
     if image_type == "result":
         folder = hashlib.sha256(session_id.encode()).hexdigest()[:16]
         public_result_path = os.path.join(PUBLIC_DIR, folder, "result.png")
-        if os.path.isfile(public_result_path):
-            return send_from_directory(os.path.join(PUBLIC_DIR, folder), "result.png")
-        return send_from_directory(PREVIEW_DIR, f"{session_id}.png")
+        if not os.path.isfile(public_result_path):
+            abort(404)
+        return send_from_directory(os.path.join(PUBLIC_DIR, folder), "result.png")
     abort(404)
 
 # 관리자 페이지
