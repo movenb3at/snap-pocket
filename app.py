@@ -14,6 +14,7 @@ import socket
 import cv2
 import numpy as np
 import copy
+import glob
 import logging
 import secrets
 
@@ -74,6 +75,9 @@ _coin_runtime_id = uuid.uuid4().hex
 _coin_balance_lock = Lock()
 _temp_session_lock = Lock()
 _discarded_temp_sessions = {}
+_yolo_face_model_lock = Lock()
+_yolo_face_inference_lock = Lock()
+_yolo_face_models = {}
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -90,6 +94,139 @@ for d in [TEMP_DIR, PUBLIC_DIR, PREVIEW_DIR, QR_DIR, METADATA_DIR]:
 
 TRANSFORM_STATUS_FILENAME = "transform_status.json"
 TRANSFORM_STATUSES = {"captured", "processing", "success", "failed"}
+
+
+def _resolve_yolo_face_model():
+    model_dir = os.path.join(BASE_DIR, "models", "mosaic")
+    preferred_model = os.path.join(model_dir, "face_yolov8n.pt")
+    if os.path.isfile(preferred_model):
+        return preferred_model
+
+    candidates = sorted(glob.glob(os.path.join(model_dir, "face_yolov8*.pt")))
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return os.path.abspath(candidate)
+
+    raise FileNotFoundError(
+        "YOLO face model not found. Place face_yolov8n.pt or another "
+        f"face_yolov8*.pt model in {model_dir}."
+    )
+
+
+def _get_yolo_face_model():
+    model_path = _resolve_yolo_face_model()
+    with _yolo_face_model_lock:
+        if model_path not in _yolo_face_models:
+            try:
+                from ultralytics import YOLO
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Ultralytics is required for mosaic_filter. "
+                    "Install the packages in requirements.txt."
+                ) from exc
+            _yolo_face_models[model_path] = YOLO(model_path, task="detect")
+        return _yolo_face_models[model_path]
+
+
+def _bounded_float(config, key, default, minimum, maximum):
+    try:
+        value = float(config.get(key, default))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{key} must be a number.") from exc
+    if not np.isfinite(value) or value < minimum or value > maximum:
+        raise ValueError(f"{key} must be between {minimum} and {maximum}.")
+    return value
+
+
+def _detect_yolo_faces(image_bgr, config):
+    confidence = _bounded_float(config, "yolo_confidence", 0.3, 0.01, 1.0)
+    iou = _bounded_float(config, "yolo_iou", 0.5, 0.01, 1.0)
+    try:
+        image_size = int(config.get("yolo_imgsz", 640))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("yolo_imgsz must be an integer.") from exc
+    if image_size < 320 or image_size > 2048:
+        raise ValueError("yolo_imgsz must be between 320 and 2048.")
+
+    model = _get_yolo_face_model()
+    with _yolo_face_inference_lock:
+        results = model.predict(
+            source=image_bgr,
+            conf=confidence,
+            iou=iou,
+            imgsz=image_size,
+            device=str(config.get("yolo_device", "cpu")),
+            verbose=False,
+        )
+
+    face_boxes = []
+    for result in results or []:
+        boxes = getattr(result, "boxes", None)
+        xyxy = getattr(boxes, "xyxy", None) if boxes is not None else None
+        if xyxy is None:
+            continue
+        if hasattr(xyxy, "cpu"):
+            xyxy = xyxy.cpu()
+        if hasattr(xyxy, "numpy"):
+            xyxy = xyxy.numpy()
+        coordinates = np.asarray(xyxy, dtype=np.float32)
+        if coordinates.size == 0:
+            continue
+        face_boxes.extend(coordinates.reshape(-1, 4).tolist())
+    return face_boxes
+
+
+def _pixelate_face_boxes(image_bgr, face_boxes, padding_ratio=0.12, mosaic_scale=0.08):
+    if not isinstance(image_bgr, np.ndarray) or image_bgr.ndim != 3:
+        raise ValueError("mosaic_filter requires a color image array.")
+
+    image_height, image_width = image_bgr.shape[:2]
+    mosaicked = image_bgr.copy()
+    for box in face_boxes:
+        x1, y1, x2, y2 = (float(value) for value in box)
+        face_width = max(0.0, x2 - x1)
+        face_height = max(0.0, y2 - y1)
+        if face_width <= 0 or face_height <= 0:
+            continue
+
+        pad_x = face_width * padding_ratio
+        pad_y = face_height * padding_ratio
+        left = max(0, int(np.floor(x1 - pad_x)))
+        top = max(0, int(np.floor(y1 - pad_y)))
+        right = min(image_width, int(np.ceil(x2 + pad_x)))
+        bottom = min(image_height, int(np.ceil(y2 + pad_y)))
+        if right <= left or bottom <= top:
+            continue
+
+        face_region = mosaicked[top:bottom, left:right]
+        region_height, region_width = face_region.shape[:2]
+        reduced_width = max(1, int(round(region_width * mosaic_scale)))
+        reduced_height = max(1, int(round(region_height * mosaic_scale)))
+        reduced = cv2.resize(
+            face_region,
+            (reduced_width, reduced_height),
+            interpolation=cv2.INTER_AREA,
+        )
+        mosaicked[top:bottom, left:right] = cv2.resize(
+            reduced,
+            (region_width, region_height),
+            interpolation=cv2.INTER_NEAREST,
+        )
+    return mosaicked
+
+
+def _apply_yolo_mosaic_filter(image_bgr, config):
+    padding_ratio = _bounded_float(config, "face_padding_ratio", 0.12, 0.0, 0.5)
+    mosaic_scale = _bounded_float(config, "mosaic_scale", 0.08, 0.01, 1.0)
+    face_boxes = _detect_yolo_faces(image_bgr, config)
+    if not face_boxes:
+        raise RuntimeError("YOLO가 얼굴을 감지하지 못해 모자이크를 적용하지 못했습니다.")
+    return _pixelate_face_boxes(
+        image_bgr,
+        face_boxes,
+        padding_ratio=padding_ratio,
+        mosaic_scale=mosaic_scale,
+    )
 
 
 def _load_json_object(path):
@@ -850,6 +987,12 @@ def _run_transform_task(session_id, style_key, gender, adetailer_enabled, overri
     # 실시간 Checkpoint 설정 로드
     checkpoint_path = os.path.join(BASE_DIR, "checkpoints.json")
 
+    if not os.path.isfile(checkpoint_path):
+        raise RuntimeError(
+            "로컬 checkpoints.json이 없습니다. checkpoints.example.json을 "
+            "checkpoints.json으로 복사한 뒤 실제 모델 설정을 입력하세요."
+        )
+
     try:
         with open(checkpoint_path, "r", encoding="utf-8") as f:
             STYLE_CONFIG = json.load(f)["checkpoints"]
@@ -923,8 +1066,13 @@ def _run_transform_task(session_id, style_key, gender, adetailer_enabled, overri
                 _, buffer = cv2.imencode('.png', distorted)
                 result_b64 = base64.b64encode(buffer).decode()
 
-            elif style_key == "face_filter": # 얼굴 필터
-                raise NotImplementedError("얼굴 필터는 아직 지원되지 않습니다.")
+            elif style_key == "mosaic_filter": # YOLO 얼굴 모자이크 필터
+                img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+                mosaicked = _apply_yolo_mosaic_filter(img_cv, cfg)
+                encoded, buffer = cv2.imencode('.png', mosaicked)
+                if not encoded:
+                    raise RuntimeError("모자이크 이미지를 PNG로 인코딩하지 못했습니다.")
+                result_b64 = base64.b64encode(buffer).decode()
 
             elif style_key == "canny_filter": # canny 필터
                 img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)

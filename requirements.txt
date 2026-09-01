@@ -6,4 +6,5 @@ opencv-python
 Pillow
 qrcode
 requests
+ultralytics
 watchdog

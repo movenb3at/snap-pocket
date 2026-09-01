@@ -1,5 +1,5 @@
 > **[IMPORTANT]**
-> Before running this repository, update `checkpoints.json` and `templates/index.html` to match the Stable Diffusion models installed on your system. Model names, paths, and style settings must agree with your local WebUI configuration.
+> Before running this repository, copy `checkpoints.example.json` to the Git-ignored `checkpoints.json`, then update the local file and `templates/index.html` to match the Stable Diffusion models installed on your system.
 
 ---
 
@@ -99,7 +99,8 @@ SnapPocket waits until the browser reports the camera's actual dimensions. It pr
 ```text
 snap-pocket/
 ├── app.py                 # Flask backend server
-├── checkpoints.json       # AI model and style configuration
+├── checkpoints.example.json # Public AI model/style template
+├── checkpoints.json       # Local AI model/style configuration (Git-ignored)
 ├── templates/
 │   ├── index.html         # Main camera UI
 │   ├── download.html      # Photo download page
@@ -197,9 +198,16 @@ python -m pip install -r requirements.txt
 
 ### 8. Configure models and styles
 
-Update the following files before launch:
+Create the private local configuration from the public template:
 
-- `checkpoints.json`: match model names, checkpoint paths, prompts, and available styles to your Stable Diffusion installation.
+```powershell
+Copy-Item checkpoints.example.json checkpoints.json
+```
+
+Then update the following files before launch:
+
+- `checkpoints.json`: enter the real model names, checkpoint paths, prompts, and available styles for your Stable Diffusion installation. This file is intentionally excluded from Git.
+- `checkpoints.example.json`: keep only shareable placeholders and the public configuration schema. Commit style-key changes such as `mosaic_filter` here.
 - `templates/index.html`: make sure the styles and options shown in the UI match the entries configured in `checkpoints.json`.
 
 ### 9. Start the services

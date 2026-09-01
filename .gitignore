@@ -32,3 +32,9 @@ static/**/*.png
 temp/**/*.png
 temp/**/*.json
 metadata/*.json
+
+# 로컬 YOLO 얼굴 모자이크 모델
+models/mosaic/*.pt
+
+# 로컬 AI 모델 및 스타일 설정
+/checkpoints.json
