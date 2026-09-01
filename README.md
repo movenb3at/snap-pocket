@@ -30,6 +30,7 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 | --- | --- |
 | Browser-based camera UI | Waits for camera metadata, preserves the camera's full aspect ratio without cropping or stretching, and limits high-resolution captures to 2,073,600 pixels without upscaling lower-resolution cameras |
 | AI image transformation | Applies configured styles through Stable Diffusion WebUI and `img2img` |
+| YOLO face mosaic | Detects every face locally with Ultralytics YOLO and pixelates padded face boxes without calling Stable Diffusion |
 | Photo framing | Adds an optional date-stamped SnapPocket frame with ten color presets and supports framed original/result comparisons or result-only output |
 | Per-device coin control | Accepts prepayment from the camera or download page, consumes one coin only when a capture continues to style selection, and keeps retakes free |
 | QR delivery | Serves the finished PNG as an attachment from a scanned QR code |
@@ -44,11 +45,11 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 ## System Architecture
 
 ```text
-[Camera Clients] → [Flask API] → [Celery Queue / Memurai] → [Stable Diffusion API]
-       │                  │                    │                       │
-[Browser UUID]      [In-memory Coin State]     │              [Generated Preview]
-       │                  │                    │                       │
-[Retake-safe Upload]  [Status Polling] ← [Task State] ←───────────────┘
+[Camera Clients] → [Flask API] → [Celery Queue / Memurai]
+       │                  │                    ├──→ [Stable Diffusion API] → [AI Preview]
+[Browser UUID]      [In-memory Coin State]     └──→ [Local YOLO + OpenCV] → [Mosaic Preview]
+       │                  │                                      │
+[Retake-safe Upload]  [Status Polling] ← [Task State] ←──────────┘
        │                  │
        └────────────→ [Finalize PNG + QR] → [Download Page]
                               │
@@ -62,11 +63,11 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 | Area | Technology |
 | --- | --- |
 | Backend | Python, Flask, Watchdog |
-| AI engine | Stable Diffusion WebUI (AUTOMATIC1111), `img2img`, ControlNet, optional ADetailer |
+| AI engine | Stable Diffusion WebUI (AUTOMATIC1111), `img2img`, ControlNet, optional ADetailer, and Ultralytics YOLO face detection |
 | Job processing | Celery with Memurai (Redis-compatible service for Windows) |
 | QR generation | `qrcode` for Python |
 | Frontend | HTML, CSS, JavaScript |
-| Image processing | Pillow (PIL), local DenkiChip font with Arial fallback for watermarks |
+| Image processing | OpenCV for mosaic pixelation, Pillow (PIL), and a local DenkiChip font with Arial fallback for watermarks |
 | Connectivity | Local LAN access, optional Cloudflare Tunnel |
 
 ---
@@ -81,6 +82,7 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 - Python and Git
 - Stable Diffusion WebUI by AUTOMATIC1111
 - Memurai installed and registered as a Windows service
+- A compatible `face_yolov8*.pt` model when using `mosaic_filter`
 
 GPU performance directly affects image-generation time.
 
@@ -101,6 +103,8 @@ snap-pocket/
 ├── app.py                 # Flask backend server
 ├── checkpoints.example.json # Public AI model/style template
 ├── checkpoints.json       # Local AI model/style configuration (Git-ignored)
+├── models/
+│   └── mosaic/             # Local face_yolov8*.pt weights (Git-ignored)
 ├── templates/
 │   ├── index.html         # Main camera UI
 │   ├── download.html      # Photo download page
@@ -164,7 +168,7 @@ http://127.0.0.1:7860
    stable-diffusion-webui/extensions/sd-webui-controlnet/models/
    ```
 
-### 4. Install ADetailer (optional)
+### 4. Install ADetailer (optional) and the mosaic YOLO model
 
 ADetailer can improve facial details, although stronger corrections may produce results that differ more noticeably from the original photo.
 
@@ -175,7 +179,15 @@ ADetailer can improve facial details, although stronger corrections may produce 
    ```
 
 2. Apply the changes and restart the WebUI.
-3. Download the recommended [`face_yolov8n.pt` model](https://huggingface.co/Bingsu/adetailer/blob/main/face_yolov8n.pt) and place it in the ADetailer model directory used by your WebUI installation.
+3. Download the recommended [`face_yolov8n.pt` model](https://huggingface.co/Bingsu/adetailer/blob/main/face_yolov8n.pt).
+4. From the SnapPocket repository root, place the model in the local mosaic directory:
+
+   ```powershell
+   New-Item -ItemType Directory -Force models\mosaic
+   Copy-Item "C:\path\to\face_yolov8n.pt" models\mosaic\
+   ```
+
+The local mosaic filter and ADetailer load models independently. If you also use ADetailer, keep a compatible copy in the model directory used by the WebUI extension. Model weights are not distributed with this repository; download and use them under the upstream project's terms.
 
 ### 5. Install Memurai
 
@@ -209,6 +221,17 @@ Then update the following files before launch:
 - `checkpoints.json`: enter the real model names, checkpoint paths, prompts, and available styles for your Stable Diffusion installation. This file is intentionally excluded from Git.
 - `checkpoints.example.json`: keep only shareable placeholders and the public configuration schema. Commit style-key changes such as `mosaic_filter` here.
 - `templates/index.html`: make sure the styles and options shown in the UI match the entries configured in `checkpoints.json`.
+
+Optional `mosaic_filter` keys may be added to the local `checkpoints.json`. When omitted, SnapPocket uses these defaults:
+
+| Key | Default | Accepted range or value |
+| --- | --- | --- |
+| `yolo_confidence` | `0.3` | `0.01` to `1.0` |
+| `yolo_iou` | `0.5` | `0.01` to `1.0` |
+| `yolo_imgsz` | `640` | Integer from `320` to `2048` |
+| `yolo_device` | `cpu` | Any Ultralytics-supported device string |
+| `face_padding_ratio` | `0.12` | `0.0` to `0.5` |
+| `mosaic_scale` | `0.08` | `0.01` to `1.0`; smaller values create larger mosaic blocks |
 
 ### 9. Start the services
 
@@ -325,17 +348,24 @@ Only add origins that you control and trust. This Chrome flag is a per-device de
 7. Scan the generated QR code to receive the PNG attachment on a mobile device.
 8. Use **Back to Start** to open `/main_page` on the same origin as the current download page. A Cloudflare download page therefore returns to the Cloudflare HTTPS camera page.
 
+### YOLO Mosaic Behavior
+
+- Choose **`[필터] 모자이크`** and select a gender because the shared transform form currently requires both fields. Gender does not change the local mosaic result.
+- The filter runs locally through Ultralytics YOLO and OpenCV, does not call Stable Diffusion, and does not expose the ADetailer option.
+- Every detected face bounding box is expanded by the configured padding ratio before the complete region is pixelated.
+- Missing `checkpoints.json`, missing `face_yolov8*.pt` weights, zero detected faces, or PNG encoding failure produces an explicit error. SnapPocket does not return an unprotected original image as a successful mosaic result.
+
 ### Frame Output Modes
 
 | Frame | Style | Result only | Final PNG |
 | --- | --- | --- | --- |
 | Off | No transform | Not available | Original image without a SnapPocket frame |
-| Off | AI transform | Not available | AI result without a SnapPocket frame |
+| Off | Transform or filter | Not available | Transformed result without a SnapPocket frame |
 | On | No transform | Not available | Framed original image |
-| On | AI transform | Off | Framed original + AI result comparison |
-| On | AI transform | On | Framed AI result only |
+| On | Transform or filter | Off | Framed original + transformed result comparison |
+| On | Transform or filter | On | Framed transformed result only |
 
-ADetailer is hidden when the selected style does not support it. **Result only** appears only when an AI transform style and a frame are both enabled. The transform button remains visible while disabled until the required style and gender selections are complete.
+ADetailer is hidden when the selected style does not support it. **Result only** appears only when a transform or filter other than **No transform** and a frame are both enabled. The transform button remains visible while disabled until the required style and gender selections are complete.
 
 ### Admin Flow
 
@@ -355,9 +385,10 @@ Administrator authentication is verified by Flask. The admin list and original `
 - Coin balances, lock states, first-seen timestamps, and remote-notification history live only in the Flask server's memory. Restarting the server resets them to an empty state; a returning browser is recreated with zero coins and a locked state.
 - One Flask server process can serve multiple independent devices. Coin state is not shared across multiple Flask server processes, so this in-memory design must not be scaled with separate web workers without adding a shared state store.
 - Coin consumption and administrator balance changes use the same server lock, preventing simultaneous operations from spending the same coin or producing a negative balance.
-- The default `--pool=solo` Celery worker processes AI transformations one at a time to protect GPU stability. Additional client tasks remain in the queue.
+- The default `--pool=solo` Celery worker processes transformation tasks one at a time to protect GPU stability. Additional client tasks remain in the queue.
 - Queue time in `PENDING` does not consume the transformation timeout. The 10-minute limit starts when the worker reports `STARTED`.
 - Stable Diffusion timeouts, invalid responses, queue failures, and missing result files are shown as errors. SnapPocket no longer substitutes the original photo when AI generation fails.
+- Mosaic model loading, face detection, and PNG encoding failures are also reported explicitly instead of returning an unprotected original image.
 - Retaking a photo aborts the previous upload, ignores late responses, and requests deletion of the discarded session's `temp` folder.
 
 ---
@@ -392,6 +423,7 @@ Administrator authentication is verified by Flask. The admin list and original `
 - [2026-08-04] Added configurable photo frames, orientation-aware collages, direct QR downloads, full-image previews, local watermark fonts, and automatic Cloudflare Quick Tunnel URL management.
 - [2026-08-06] Added server-side administrator sessions, explicit transform failure handling, retake race protection, queue-aware 10-minute limits, taller admin previews, and same-origin **Back to Start** navigation.
 - [2026-08-31] Added aspect-ratio-safe camera capture, prepayment and per-device in-memory coin balances, administrator device locks and remote coin controls, free retake cleanup, result-only frame output, mobile confirmation scrolling, and automatic admin preview-to-final image refresh.
+- [2026-09-01] Added local YOLO face mosaic filtering, Git-ignored `models/mosaic` weights, and a public `checkpoints.example.json` with private local configuration kept in `checkpoints.json`.
 
 ---
 
