@@ -424,6 +424,7 @@ Administrator authentication is verified by Flask. The admin list and original `
 - [2026-08-06] Added server-side administrator sessions, explicit transform failure handling, retake race protection, queue-aware 10-minute limits, taller admin previews, and same-origin **Back to Start** navigation.
 - [2026-08-31] Added aspect-ratio-safe camera capture, prepayment and per-device in-memory coin balances, administrator device locks and remote coin controls, free retake cleanup, result-only frame output, mobile confirmation scrolling, and automatic admin preview-to-final image refresh.
 - [2026-09-01] Added local YOLO face mosaic filtering, Git-ignored `models/mosaic` weights, and a public `checkpoints.example.json` with private local configuration kept in `checkpoints.json`.
+- [2026-09-04] Added convex and concave mirror filters, corrected edge-coordinate mapping, and documented the strict mirror-filter key migration.
 
 ---
 

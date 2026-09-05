@@ -94,6 +94,10 @@ for d in [TEMP_DIR, PUBLIC_DIR, PREVIEW_DIR, QR_DIR, METADATA_DIR]:
 
 TRANSFORM_STATUS_FILENAME = "transform_status.json"
 TRANSFORM_STATUSES = {"captured", "processing", "success", "failed"}
+MIRROR_FILTER_POWERS = {
+    "convex_mirror_filter": 2.0,
+    "concave_mirror_filter": 0.5,
+}
 
 
 def _resolve_yolo_face_model():
@@ -227,6 +231,44 @@ def _apply_yolo_mosaic_filter(image_bgr, config):
         padding_ratio=padding_ratio,
         mosaic_scale=mosaic_scale,
     )
+
+
+def _apply_mirror_filter(image_bgr, radial_power):
+    if (
+        not isinstance(image_bgr, np.ndarray)
+        or image_bgr.ndim != 3
+        or image_bgr.shape[2] != 3
+    ):
+        raise ValueError("mirror filter requires a BGR color image array.")
+
+    rows, cols = image_bgr.shape[:2]
+    if rows < 2 or cols < 2:
+        raise ValueError("mirror filter requires an image at least 2x2 pixels.")
+
+    mapy, mapx = np.indices((rows, cols), dtype=np.float32)
+    mapx = 2 * mapx / (cols - 1) - 1
+    mapy = 2 * mapy / (rows - 1) - 1
+    radius, theta = cv2.cartToPolar(mapx, mapy)
+    inside_mirror = radius < 1
+    radius[inside_mirror] = np.power(radius[inside_mirror], radial_power)
+    mapx, mapy = cv2.polarToCart(radius, theta)
+    mapx = (mapx + 1) * (cols - 1) / 2
+    mapy = (mapy + 1) * (rows - 1) / 2
+
+    return cv2.remap(
+        image_bgr,
+        mapx,
+        mapy,
+        cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REPLICATE,
+    )
+
+
+def _encode_png_base64(image, filter_name):
+    encoded, buffer = cv2.imencode(".png", image)
+    if not encoded or buffer is None:
+        raise RuntimeError(f"{filter_name} result could not be encoded as PNG.")
+    return base64.b64encode(buffer).decode()
 
 
 def _load_json_object(path):
@@ -1004,7 +1046,7 @@ def _run_transform_task(session_id, style_key, gender, adetailer_enabled, overri
     else:
         logger.info("checkpoints.json loaded successfully.")
 
-        if style_key not in STYLE_CONFIG:
+        if style_key == "distortion_lens_filter" or style_key not in STYLE_CONFIG:
             raise ValueError(f"Unsupported style: {style_key}")
         if type(adetailer_enabled) is not bool:
             raise ValueError("ADetailer enabled flag must be a boolean.")
@@ -1051,20 +1093,13 @@ def _run_transform_task(session_id, style_key, gender, adetailer_enabled, overri
         result_b64 = None
 
         if cfg.get("model_name") is None:
-            if style_key == "distortion_lens_filter": # 볼록거울 필터
+            if style_key in MIRROR_FILTER_POWERS:
                 img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-                rows, cols = img_cv.shape[:2]
-                mapy, mapx = np.indices((rows, cols), dtype=np.float32)
-                mapx = 2 * mapx / (cols - 1) - 1
-                mapy = 2 * mapy / (rows - 1) - 1
-                r, theta = cv2.cartToPolar(mapx, mapy)
-                r[r < 1] = r[r < 1] ** 2  
-                mapx, mapy = cv2.polarToCart(r, theta)
-                mapx = ((mapx + 1) * cols - 1) / 2
-                mapy = ((mapy + 1) * rows - 1) / 2
-                distorted = cv2.remap(img_cv, mapx, mapy, cv2.INTER_LINEAR)
-                _, buffer = cv2.imencode('.png', distorted)
-                result_b64 = base64.b64encode(buffer).decode()
+                distorted = _apply_mirror_filter(
+                    img_cv,
+                    MIRROR_FILTER_POWERS[style_key],
+                )
+                result_b64 = _encode_png_base64(distorted, style_key)
 
             elif style_key == "mosaic_filter": # YOLO 얼굴 모자이크 필터
                 img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)

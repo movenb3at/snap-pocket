@@ -99,7 +99,22 @@
             "ad_negative_prompt": "",
             "ad_denoising_strength": 0
         },
-        "distortion_lens_filter": {
+        "convex_mirror_filter": {
+            "model_name": null,
+            "steps": 50,
+            "cfg_scale": 7,
+            "denoising_strength": 0.75,
+            "prompt": "",
+            "negative_prompt": "",
+            "controlnet_model": "",
+            "controlnet_module": "",
+            "controlnet_weight": 0,
+            "ad_model": "",
+            "ad_prompt": "",
+            "ad_negative_prompt": "",
+            "ad_denoising_strength": 0
+        },
+        "concave_mirror_filter": {
             "model_name": null,
             "steps": 50,
             "cfg_scale": 7,
