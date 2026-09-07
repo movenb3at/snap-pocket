@@ -94,7 +94,7 @@ for d in [TEMP_DIR, PUBLIC_DIR, PREVIEW_DIR, QR_DIR, METADATA_DIR]:
 
 TRANSFORM_STATUS_FILENAME = "transform_status.json"
 TRANSFORM_STATUSES = {"captured", "processing", "success", "failed"}
-MIRROR_FILTER_POWERS = {
+MIRROR_FILTER_DEFAULT_POWERS = {
     "convex_mirror_filter": 2.0,
     "concave_mirror_filter": 0.5,
 }
@@ -262,6 +262,31 @@ def _apply_mirror_filter(image_bgr, radial_power):
         cv2.INTER_LINEAR,
         borderMode=cv2.BORDER_REPLICATE,
     )
+
+
+def _apply_color_inversion_filter(image_bgr, strength=1.0):
+    if (
+        not isinstance(image_bgr, np.ndarray)
+        or image_bgr.ndim != 3
+        or image_bgr.shape[2] != 3
+    ):
+        raise ValueError(
+            "color_inversion_filter requires a BGR color image array."
+        )
+    if image_bgr.dtype != np.uint8:
+        raise ValueError("color_inversion_filter requires uint8 image data.")
+
+    try:
+        strength = float(strength)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("inversion_strength must be a number.") from exc
+    if not np.isfinite(strength) or strength < 0.0 or strength > 1.0:
+        raise ValueError("inversion_strength must be between 0.0 and 1.0.")
+
+    inverted = cv2.bitwise_not(image_bgr)
+    if strength == 1.0:
+        return inverted
+    return cv2.addWeighted(image_bgr, 1.0 - strength, inverted, strength, 0)
 
 
 def _encode_png_base64(image, filter_name):
@@ -1093,13 +1118,28 @@ def _run_transform_task(session_id, style_key, gender, adetailer_enabled, overri
         result_b64 = None
 
         if cfg.get("model_name") is None:
-            if style_key in MIRROR_FILTER_POWERS:
+            if style_key in MIRROR_FILTER_DEFAULT_POWERS:
                 img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+                radial_power = _bounded_float(
+                    cfg,
+                    "radial_power",
+                    MIRROR_FILTER_DEFAULT_POWERS[style_key],
+                    0.01,
+                    10.0,
+                )
                 distorted = _apply_mirror_filter(
                     img_cv,
-                    MIRROR_FILTER_POWERS[style_key],
+                    radial_power,
                 )
                 result_b64 = _encode_png_base64(distorted, style_key)
+
+            elif style_key == "color_inversion_filter":
+                img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+                inverted = _apply_color_inversion_filter(
+                    img_cv,
+                    cfg.get("inversion_strength", 1.0),
+                )
+                result_b64 = _encode_png_base64(inverted, style_key)
 
             elif style_key == "mosaic_filter": # YOLO 얼굴 모자이크 필터
                 img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
@@ -1111,10 +1151,20 @@ def _run_transform_task(session_id, style_key, gender, adetailer_enabled, overri
 
             elif style_key == "canny_filter": # canny 필터
                 img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
-                edges = cv2.Canny(img_cv, 50, 150)
-                edges_colored = cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
-                _, buffer = cv2.imencode('.png', edges_colored)
-                result_b64 = base64.b64encode(buffer).decode()
+                threshold_low = _bounded_float(
+                    cfg, "canny_threshold_low", 50.0, 0.0, 255.0
+                )
+                threshold_high = _bounded_float(
+                    cfg, "canny_threshold_high", 150.0, 0.0, 255.0
+                )
+                if threshold_low >= threshold_high:
+                    raise ValueError(
+                        "canny_threshold_low must be less than "
+                        "canny_threshold_high."
+                    )
+                edges = cv2.Canny(img_cv, threshold_low, threshold_high)
+                edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+                result_b64 = _encode_png_base64(edges_bgr, style_key)
 
             else: 
                 result_b64 = init_b64 # 원본 반환

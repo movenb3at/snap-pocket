@@ -222,16 +222,21 @@ Then update the following files before launch:
 - `checkpoints.example.json`: keep only shareable placeholders and the public configuration schema. Commit style-key changes such as `mosaic_filter` here.
 - `templates/index.html`: make sure the styles and options shown in the UI match the entries configured in `checkpoints.json`.
 
-Optional `mosaic_filter` keys may be added to the local `checkpoints.json`. When omitted, SnapPocket uses these defaults:
+Local filter behavior can be tuned directly in `checkpoints.json`. When a key is omitted, SnapPocket uses the listed default:
 
-| Key | Default | Accepted range or value |
-| --- | --- | --- |
-| `yolo_confidence` | `0.3` | `0.01` to `1.0` |
-| `yolo_iou` | `0.5` | `0.01` to `1.0` |
-| `yolo_imgsz` | `640` | Integer from `320` to `2048` |
-| `yolo_device` | `cpu` | Any Ultralytics-supported device string |
-| `face_padding_ratio` | `0.12` | `0.0` to `0.5` |
-| `mosaic_scale` | `0.08` | `0.01` to `1.0`; smaller values create larger mosaic blocks |
+| Filter | Key | Default | Accepted range or value |
+| --- | --- | --- | --- |
+| Convex mirror | `radial_power` | `2.0` | `0.01` to `10.0` |
+| Concave mirror | `radial_power` | `0.5` | `0.01` to `10.0` |
+| Color inversion | `inversion_strength` | `1.0` | `0.0` for the original image to `1.0` for full inversion |
+| Mosaic | `yolo_confidence` | `0.3` | `0.01` to `1.0` |
+| Mosaic | `yolo_iou` | `0.5` | `0.01` to `1.0` |
+| Mosaic | `yolo_imgsz` | `640` | Integer from `320` to `2048` |
+| Mosaic | `yolo_device` | `cpu` | Any Ultralytics-supported device string |
+| Mosaic | `face_padding_ratio` | `0.12` | `0.0` to `0.5` |
+| Mosaic | `mosaic_scale` | `0.08` | `0.01` to `1.0`; smaller values create larger mosaic blocks |
+| Canny | `canny_threshold_low` | `50` | `0.0` to `255.0`; must be lower than the high threshold |
+| Canny | `canny_threshold_high` | `150` | `0.0` to `255.0`; must be higher than the low threshold |
 
 ### 9. Start the services
 
@@ -425,6 +430,7 @@ Administrator authentication is verified by Flask. The admin list and original `
 - [2026-08-31] Added aspect-ratio-safe camera capture, prepayment and per-device in-memory coin balances, administrator device locks and remote coin controls, free retake cleanup, result-only frame output, mobile confirmation scrolling, and automatic admin preview-to-final image refresh.
 - [2026-09-01] Added local YOLO face mosaic filtering, Git-ignored `models/mosaic` weights, and a public `checkpoints.example.json` with private local configuration kept in `checkpoints.json`.
 - [2026-09-04] Added convex and concave mirror filters, corrected edge-coordinate mapping, and documented the strict mirror-filter key migration.
+- [2026-09-07] Added a local OpenCV color inversion filter.
 
 ---
 
