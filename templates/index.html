@@ -1503,7 +1503,7 @@
                 <div class="frame-option-copy">
                     <strong>ADetailer 얼굴 보정</strong>
                     <span id="adetailerOptionDescription"
-                          data-enabled-text="얼굴 디테일을 추가로 보정합니다. 원본과 달라질 수도 있으며, 소요 시간이 더 오래 걸릴 수도 있습니다."
+                          data-enabled-text="얼굴 디테일을 과도하게 보정합니다. 원본과 크게 달라질 수 있으며, 소요 시간이 더 오래 걸립니다."
                           data-unavailable-text="원본 반환과 필터는 Stable Diffusion을 사용하지 않아 적용할 수 없습니다."
                           data-select-text="Stable Diffusion 스타일을 선택하면 사용할 수 있습니다.">Stable Diffusion 스타일을 선택하면 사용할 수 있습니다.</span>
                 </div>
@@ -2257,7 +2257,10 @@ function uploadImage(dataURL) {
 
     fetch("/upload_temp", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            "X-SnapPocket-Client-ID": coinClientId
+        },
         body: JSON.stringify({ image: dataURL, session_id: sessionId }),
         signal: controller.signal
     })

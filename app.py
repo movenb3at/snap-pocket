@@ -73,6 +73,8 @@ _coin_first_seen_by_client = {}
 _coin_remote_events_by_client = {}
 _coin_remote_event_sequences_by_client = {}
 _coin_runtime_id = uuid.uuid4().hex
+# Current Flask process only; never persist capture-device associations.
+_capture_clients_by_folder = {}
 _coin_balance_lock = Lock()
 _temp_session_lock = Lock()
 _discarded_temp_sessions = {}
@@ -717,6 +719,13 @@ def admin_data():
             "result_url": f"/public/{folder}/result.png"
         })
 
+    coin_clients = _get_coin_balances_snapshot()
+    device_numbers = {client["client_id"]: index + 1 for index, client in enumerate(coin_clients)}
+    with _coin_balance_lock:
+        capture_clients = dict(_capture_clients_by_folder)
+    for item in items:
+        item["capture_device_number"] = device_numbers.get(capture_clients.get(item["folder"]))
+
     items.sort(key=lambda x: x["timestamp"], reverse=True)
     success_count = session_statuses.count("success")
     failure_count = session_statuses.count("failed")
@@ -730,7 +739,7 @@ def admin_data():
     )
     return jsonify({
         "items": items,
-        "coin_clients": _get_coin_balances_snapshot(),
+        "coin_clients": coin_clients,
         "stats": {
             "photo_count": len(session_folders),
             "success_count": success_count,
@@ -1020,6 +1029,11 @@ def upload_temp():
             with open(img_path, "wb") as f:
                 f.write(base64.b64decode(img_data))
             _write_transform_status(session_id, "captured")
+            client_id = _get_coin_client_id()
+            with _coin_balance_lock:
+                if client_id in _coin_balances_by_client:
+                    folder = hashlib.sha256(session_id.encode()).hexdigest()[:16]
+                    _capture_clients_by_folder[folder] = client_id
         except Exception:
             shutil.rmtree(session_folder, ignore_errors=True)
             raise
@@ -1047,6 +1061,10 @@ def discard_temp():
         else:
             _discarded_temp_sessions[session_id] = time.monotonic()
             deleted = False
+
+        with _coin_balance_lock:
+            folder = hashlib.sha256(session_id.encode()).hexdigest()[:16]
+            _capture_clients_by_folder.pop(folder, None)
 
     return jsonify({"session_id": session_id, "deleted": deleted})
 

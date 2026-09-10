@@ -1941,6 +1941,8 @@
                         <div class="item-info">
                             <div class="folder-name">${escapeHTML(item.folder)}</div>
                             <div class="time-stamp">${escapeHTML(item.time)}</div>
+                            ${Number.isSafeInteger(item.capture_device_number) && item.capture_device_number > 0 ? `
+                            <div class="time-stamp capture-device">촬영 기기: 기기 ${item.capture_device_number}</div>` : ""}
                         </div>
                         <div class="item-badge status-${escapeHTML(statusKey)}">${escapeHTML(status.label)}</div>
                     </div>
@@ -1964,7 +1966,8 @@
                 item.result_version,
                 item.finalized,
                 item.timestamp,
-                item.metadata
+                item.metadata,
+                item.capture_device_number
             ]);
         }
 
