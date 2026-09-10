@@ -45,6 +45,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+FORCE_LOW_RES = os.environ.get("force_low_res", "False").strip().lower() == "true"
 
 ADMIN_PASSWORD = os.environ.get("SNAP_POCKET_ADMIN_PASSWORD")
 ADMIN_PASSWORD_WAS_GENERATED = not ADMIN_PASSWORD
@@ -513,7 +514,8 @@ def consume_coin():
 def index():
     return render_template(
         "index.html",
-        watermark_text=_get_watermark_text()
+        watermark_text=_get_watermark_text(),
+        force_low_res=FORCE_LOW_RES
     )
 
 # 관리자 로그인

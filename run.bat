@@ -3,6 +3,11 @@ setlocal EnableExtensions EnableDelayedExpansion
 title SnapPocket Web Server
 cd /d "%~dp0"
 
+REM True: save captures within 1280x720 (portrait: 720x1280), preserving aspect ratio.
+REM The saved original is also reduced. Restart the server and refresh the page after changing.
+set "force_low_res=False"
+echo [Camera] force_low_res=%force_low_res%
+
 if not defined SNAP_POCKET_ADMIN_PASSWORD (
     for /f "delims=" %%P in ('python -c "import secrets; print(secrets.token_urlsafe(12))"') do set "SNAP_POCKET_ADMIN_PASSWORD=%%P"
     if not defined SNAP_POCKET_ADMIN_PASSWORD (

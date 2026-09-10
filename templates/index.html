@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-force-low-res='{{ force_low_res | tojson }}'>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1631,6 +1631,7 @@ const TRANSFORM_TIMEOUT_MS = 10 * 60 * 1000;
 const TRANSFORM_POLL_INTERVAL_MS = 1500;
 const COIN_BALANCE_POLL_INTERVAL_MS = 1000;
 const COIN_NOTICE_DURATION_MS = 2600;
+const FORCE_LOW_RES = document.documentElement.dataset.forceLowRes === "true";
 const MAX_CAPTURE_PIXELS = 1920 * 1080;
 const MAX_PREVIEW_HEIGHT_PX = 720;
 const COIN_CLIENT_ID_STORAGE_KEY = "snapPocketCoinClientId";
@@ -2053,6 +2054,18 @@ function calculateCaptureDimensions(sourceWidth, sourceHeight) {
     if (!Number.isSafeInteger(width) || width <= 0) return null;
     if (!Number.isSafeInteger(height) || height <= 0) return null;
 
+    if (FORCE_LOW_RES) {
+        const isPortrait = height > width;
+        const maxWidth = isPortrait ? 720 : 1280;
+        const maxHeight = isPortrait ? 1280 : 720;
+        const scale = Math.min(1, maxWidth / width, maxHeight / height);
+        return {
+            width: Math.max(1, Math.floor(width * scale)),
+            height: Math.max(1, Math.floor(height * scale)),
+            scale
+        };
+    }
+
     const sourcePixels = width * height;
     const scale = sourcePixels > MAX_CAPTURE_PIXELS
         ? Math.sqrt(MAX_CAPTURE_PIXELS / sourcePixels)
@@ -2133,7 +2146,10 @@ if (!navigator.mediaDevices?.getUserMedia) {
     setCameraReady(false);
 } else {
     navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1920 }, height: { ideal: 1080 } }
+        video: {
+            width: { ideal: FORCE_LOW_RES ? 1280 : 1920 },
+            height: { ideal: FORCE_LOW_RES ? 720 : 1080 }
+        }
     })
     .then(stream => {
         video.srcObject = stream;
