@@ -136,9 +136,15 @@ def _get_yolo_face_model():
                 from ultralytics import YOLO
             except ImportError as exc:
                 raise RuntimeError(
-                    "Ultralytics is required for mosaic_filter. "
+                    "Ultralytics is required for face filters. "
                     "Install the packages in requirements.txt."
                 ) from exc
+            try:
+                # 모든 처리를 로컬에서만 하도록 Ultralytics 사용 통계 전송을 끈다
+                from ultralytics import settings as ultralytics_settings
+                ultralytics_settings.update({"sync": False})
+            except Exception as exc:
+                logger.warning("Could not disable Ultralytics analytics sync: %s", exc)
             _yolo_face_models[model_path] = YOLO(model_path, task="detect")
         return _yolo_face_models[model_path]
 
@@ -320,6 +326,446 @@ def _apply_color_inversion_filter(image_bgr, strength=1.0):
     if strength == 1.0:
         return inverted
     return cv2.addWeighted(image_bgr, 1.0 - strength, inverted, strength, 0)
+
+
+def _require_bgr_uint8(image_bgr, filter_name):
+    if (
+        not isinstance(image_bgr, np.ndarray)
+        or image_bgr.ndim != 3
+        or image_bgr.shape[2] != 3
+    ):
+        raise ValueError(f"{filter_name} requires a BGR color image array.")
+    if image_bgr.dtype != np.uint8:
+        raise ValueError(f"{filter_name} requires uint8 image data.")
+    if image_bgr.shape[0] < 2 or image_bgr.shape[1] < 2:
+        raise ValueError(f"{filter_name} requires an image at least 2x2 pixels.")
+
+
+def _session_seed(session_id):
+    # 같은 세션을 다시 변환해도 같은 결과가 나오도록 세션 ID로 난수 시드를 고정
+    return int(hashlib.sha256(str(session_id).encode()).hexdigest()[:8], 16)
+
+
+def _detect_faces_or_raise(image_bgr, config, filter_label):
+    face_boxes = _detect_yolo_faces(image_bgr, config)
+    if not face_boxes:
+        raise RuntimeError(f"YOLO가 얼굴을 감지하지 못해 {filter_label} 적용하지 못했습니다.")
+    return face_boxes
+
+
+def _padded_face_box(box, padding_ratio, image_shape):
+    rows, cols = image_shape[:2]
+    left, top, right, bottom = box
+    pad_x = (right - left) * padding_ratio
+    pad_y = (bottom - top) * padding_ratio
+    left = max(0, int(math.floor(left - pad_x)))
+    top = max(0, int(math.floor(top - pad_y)))
+    right = min(cols, int(math.ceil(right + pad_x)))
+    bottom = min(rows, int(math.ceil(bottom + pad_y)))
+    return left, top, right, bottom
+
+
+def _apply_big_head_filter(image_bgr, face_boxes, magnification=1.8, radius_ratio=0.8):
+    _require_bgr_uint8(image_bgr, "big_head_filter")
+    rows, cols = image_bgr.shape[:2]
+    # 원 안에서 r_src = r * (1 - k * (1 - t^2)^2) 로 당겨오면
+    # 중심 배율은 1 / (1 - k) = magnification, 경계(t = 1)에서는 값과 기울기가 모두 1이 되어 이음새가 없다.
+    k = 1.0 - 1.0 / magnification
+    result = image_bgr.copy()
+    # 큰 얼굴부터 처리해야 작은 얼굴이 큰 얼굴의 볼록 영역에 덮이지 않는다
+    for left, top, right, bottom in sorted(
+        face_boxes, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]), reverse=True
+    ):
+        center_x = (left + right) / 2
+        # 머리카락까지 포함되도록 중심을 약간 위로 올린다
+        center_y = (top + bottom) / 2 - (bottom - top) * 0.1
+        radius = max(right - left, bottom - top) * radius_ratio
+        if radius < 2:
+            continue
+
+        x0 = max(0, int(center_x - radius))
+        y0 = max(0, int(center_y - radius))
+        x1 = min(cols, int(math.ceil(center_x + radius)) + 1)
+        y1 = min(rows, int(math.ceil(center_y + radius)) + 1)
+        if x1 - x0 < 2 or y1 - y0 < 2:
+            continue
+
+        mapy, mapx = np.indices((y1 - y0, x1 - x0), dtype=np.float32)
+        dx = mapx + x0 - center_x
+        dy = mapy + y0 - center_y
+        t = np.sqrt(dx * dx + dy * dy) / radius
+        scale = np.where(t < 1.0, 1.0 - k * (1.0 - t * t) ** 2, 1.0).astype(np.float32)
+        src_x = (center_x + dx * scale).astype(np.float32)
+        src_y = (center_y + dy * scale).astype(np.float32)
+        result[y0:y1, x0:x1] = cv2.remap(
+            result,
+            src_x,
+            src_y,
+            cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_REPLICATE,
+        )
+    return result
+
+
+def _paste_face(destination, face_patch, box):
+    left, top, right, bottom = box
+    width, height = right - left, bottom - top
+    patch = cv2.resize(face_patch, (width, height), interpolation=cv2.INTER_LINEAR)
+    region = destination[top:bottom, left:right]
+    feather = max(1.0, min(width, height) / 14)
+    mask = np.zeros((height, width), dtype=np.uint8)
+    # 흐림 처리 후에도 상자 경계에 닿지 않도록 안쪽으로 줄인 타원 마스크
+    cv2.ellipse(
+        mask,
+        (width // 2, height // 2),
+        (max(1, int(width / 2 - 2 * feather)), max(1, int(height / 2 - 2 * feather))),
+        0, 0, 360, 255, -1,
+    )
+    inside = mask > 0
+
+    # 붙일 얼굴의 밝기는 원래 자리의 조명에 맞추고, 피부색은 절반만 맞춰 원래 얼굴 느낌을 남긴다
+    patch_lab = cv2.cvtColor(patch, cv2.COLOR_BGR2LAB).astype(np.float32)
+    region_lab = cv2.cvtColor(region, cv2.COLOR_BGR2LAB).astype(np.float32)
+    for channel, amount in ((0, 1.0), (1, 0.5), (2, 0.5)):
+        source = patch_lab[..., channel]
+        src_mean, src_std = source[inside].mean(), source[inside].std() + 1e-6
+        dst_mean, dst_std = region_lab[..., channel][inside].mean(), region_lab[..., channel][inside].std() + 1e-6
+        matched = (source - src_mean) * (dst_std / src_std) + dst_mean
+        patch_lab[..., channel] = source + (matched - source) * amount
+    patch = cv2.cvtColor(np.clip(patch_lab, 0, 255).astype(np.uint8), cv2.COLOR_LAB2BGR)
+
+    alpha = cv2.GaussianBlur(mask, (0, 0), feather)
+    alpha = (alpha.astype(np.float32) / 255.0)[..., None]
+    blended = region.astype(np.float32) * (1 - alpha) + patch.astype(np.float32) * alpha
+    output = destination.copy()
+    output[top:bottom, left:right] = np.clip(blended, 0, 255).astype(np.uint8)
+    return output
+
+
+def _apply_face_swap_filter(image_bgr, face_boxes, padding_ratio=0.1):
+    _require_bgr_uint8(image_bgr, "face_swap_filter")
+    boxes = []
+    for box in face_boxes:
+        padded = _padded_face_box(box, padding_ratio, image_bgr.shape)
+        if padded[2] - padded[0] >= 8 and padded[3] - padded[1] >= 8:
+            boxes.append(padded)
+    if not boxes:
+        raise RuntimeError("얼굴 영역이 너무 작아 얼굴 바꾸기를 적용하지 못했습니다.")
+
+    # 왼쪽부터 정렬해 얼굴을 한 칸씩 돌린다 (A←B, B←C, ..., 마지막←A)
+    boxes.sort(key=lambda b: b[0])
+    patches = [image_bgr[t:b, l:r].copy() for l, t, r, b in boxes]
+    if len(boxes) == 1:
+        # 혼자 찍으면 얼굴을 위아래로 뒤집는다
+        patches = [cv2.flip(patches[0], 0)]
+    else:
+        patches = patches[1:] + patches[:1]
+
+    result = image_bgr.copy()
+    for patch, box in zip(patches, boxes):
+        result = _paste_face(result, patch, box)
+    return result
+
+
+HANGUL_ART_CHARACTERS = " .ㅡㅅㄴㅇㅎㅁ나가한똠글뭐"
+
+
+def _apply_hangul_art_filter(image_bgr, rows=90):
+    _require_bgr_uint8(image_bgr, "hangul_art_filter")
+    height, width = image_bgr.shape[:2]
+    # 번들 픽셀 폰트는 10x12 그리드라서 셀 크기를 12의 배수에 맞추면 글자가 선명하다
+    raw_cell_h = height / rows
+    cell_h = 12 * int(round(raw_cell_h / 12)) if raw_cell_h >= 12 else max(6, int(raw_cell_h))
+    font = _load_watermark_font(cell_h)
+    cell_w = max(1, int(round(cell_h * 10 / 12)))
+
+    def render_glyph(character):
+        canvas = Image.new("L", (cell_w, cell_h), 0)
+        ImageDraw.Draw(canvas).text((0, 0), character, fill=255, font=font)
+        return np.asarray(canvas, dtype=np.float32) / 255.0
+
+    # 폰트에 없는 글자(빈 네모로 그려짐)는 제외
+    missing_glyph = render_glyph("")
+    glyphs = []
+    for character in dict.fromkeys(HANGUL_ART_CHARACTERS):
+        glyph = render_glyph(character)
+        if character != " " and np.array_equal(glyph, missing_glyph):
+            continue
+        glyphs.append((float(glyph.mean()), glyph))
+    if len(glyphs) < 2:
+        raise RuntimeError("한글 아트에 사용할 글꼴을 불러오지 못했습니다.")
+    # 잉크 양(밝기)이 적은 글자부터 정렬
+    glyphs.sort(key=lambda item: item[0])
+    densities = np.array([density for density, _ in glyphs], dtype=np.float32)
+    densities /= max(densities[-1], 1e-6)
+    glyph_stack = np.stack([glyph for _, glyph in glyphs])
+
+    grid_rows, grid_cols = height // cell_h, width // cell_w
+    if grid_rows < 1 or grid_cols < 1:
+        raise ValueError("hangul_art_filter requires a larger image.")
+    cells = cv2.resize(image_bgr, (grid_cols, grid_rows), interpolation=cv2.INTER_AREA)
+    luminance = cv2.cvtColor(cells, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
+    luminance = cv2.normalize(luminance, None, 0.0, 1.0, cv2.NORM_MINMAX)
+    indices = np.abs(luminance[..., None] - densities).argmin(axis=2)
+
+    # (행, 열, 셀높이, 셀너비) 글자 마스크를 이어 붙여 한 장의 이미지로 만든다
+    ink = glyph_stack[indices].transpose(0, 2, 1, 3).reshape(grid_rows * cell_h, grid_cols * cell_w)
+    # 글자 색은 원래 색을 밝게 끌어올려 검은 배경에서도 잘 보이게 한다
+    colors = cv2.convertScaleAbs(cells, alpha=1.3, beta=40).astype(np.float32)
+    colors = cv2.resize(colors, (grid_cols * cell_w, grid_rows * cell_h), interpolation=cv2.INTER_NEAREST)
+    art = np.clip(colors * ink[..., None], 0, 255).astype(np.uint8)
+
+    result = np.zeros_like(image_bgr)
+    offset_y = (height - art.shape[0]) // 2
+    offset_x = (width - art.shape[1]) // 2
+    result[offset_y:offset_y + art.shape[0], offset_x:offset_x + art.shape[1]] = art
+    return result
+
+
+# 원조 게임보이의 4단계 녹색 팔레트 (BGR, 어두운 순)
+GAMEBOY_PALETTE_BGR = np.array(
+    [[15, 56, 15], [48, 98, 48], [15, 172, 139], [15, 188, 155]], dtype=np.uint8
+)
+BAYER_4X4 = np.array(
+    [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]], dtype=np.float32
+)
+
+
+def _apply_gameboy_filter(image_bgr, pixel_height=144):
+    _require_bgr_uint8(image_bgr, "gameboy_filter")
+    height, width = image_bgr.shape[:2]
+    # 게임보이 화면 세로 해상도(144px)로 줄였다가 다시 키운다
+    small_h = max(2, min(height, pixel_height))
+    small_w = max(2, int(round(width * small_h / height)))
+    small = cv2.resize(image_bgr, (small_w, small_h), interpolation=cv2.INTER_AREA)
+    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    gray = cv2.normalize(gray, None, 0.0, 1.0, cv2.NORM_MINMAX)
+
+    levels = len(GAMEBOY_PALETTE_BGR)
+    threshold = np.tile((BAYER_4X4 + 0.5) / 16.0, (small_h // 4 + 1, small_w // 4 + 1))[:small_h, :small_w]
+    indices = np.clip(np.floor(gray * (levels - 1) + threshold), 0, levels - 1).astype(np.intp)
+    dithered = GAMEBOY_PALETTE_BGR[indices]
+    return cv2.resize(dithered, (width, height), interpolation=cv2.INTER_NEAREST)
+
+
+# 팝아트 4분할 팔레트 (BGR: 그림자, 중간, 하이라이트)
+POPART_PALETTES_BGR = (
+    ((90, 20, 120), (180, 60, 255), (100, 240, 255)),
+    ((40, 40, 20), (220, 160, 0), (180, 255, 120)),
+    ((20, 0, 90), (40, 120, 255), (230, 230, 255)),
+    ((70, 0, 20), (255, 90, 160), (120, 255, 255)),
+)
+
+
+def _apply_popart_filter(image_bgr):
+    _require_bgr_uint8(image_bgr, "popart_filter")
+    height, width = image_bgr.shape[:2]
+    tile_w, tile_h = max(1, width // 2), max(1, height // 2)
+    tile = cv2.resize(image_bgr, (tile_w, tile_h), interpolation=cv2.INTER_AREA)
+    gray = cv2.cvtColor(cv2.bilateralFilter(tile, 9, 60, 60), cv2.COLOR_BGR2GRAY)
+    gray = cv2.equalizeHist(gray)
+    # 0~255 밝기를 3단계로 포스터화
+    levels = np.minimum(gray.astype(np.intp) * 3 // 256, 2)
+
+    tiles = [np.array(palette, dtype=np.uint8)[levels] for palette in POPART_PALETTES_BGR]
+    grid = np.vstack([np.hstack(tiles[:2]), np.hstack(tiles[2:])])
+    return cv2.resize(grid, (width, height), interpolation=cv2.INTER_NEAREST)
+
+
+def _apply_halftone_filter(image_bgr, dot_spacing=None):
+    _require_bgr_uint8(image_bgr, "halftone_filter")
+    height, width = image_bgr.shape[:2]
+    if dot_spacing is None:
+        dot_spacing = max(4.0, min(height, width) / 110)
+    spacing = float(dot_spacing)
+
+    # 감산혼합: 시안 잉크는 빨강을, 마젠타는 초록을, 노랑은 파랑을 흡수한다
+    rgb = cv2.GaussianBlur(image_bgr, (0, 0), spacing / 3)[..., ::-1].astype(np.float32) / 255.0
+    ys, xs = np.indices((height, width), dtype=np.float32)
+    output = np.ones((height, width, 3), dtype=np.float32)
+    # 인쇄 망점처럼 판마다 각도를 달리해 모아레를 줄인다 (C 15°, M 75°, Y 0°)
+    for channel, angle in ((0, 15.0), (1, 75.0), (2, 0.0)):
+        ink_amount = 1.0 - rgb[..., channel]
+        cos_a, sin_a = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+        u = xs * cos_a + ys * sin_a
+        v = -xs * sin_a + ys * cos_a
+        cell_u = (np.floor(u / spacing) + 0.5) * spacing
+        cell_v = (np.floor(v / spacing) + 0.5) * spacing
+        center_x = (cell_u * cos_a - cell_v * sin_a).astype(np.float32)
+        center_y = (cell_u * sin_a + cell_v * cos_a).astype(np.float32)
+        sampled = cv2.remap(ink_amount, center_x, center_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+        # 망점 면적이 잉크 양에 비례하도록 반지름 ∝ √잉크
+        radius = spacing / math.sqrt(2) * np.sqrt(np.clip(sampled, 0, 1))
+        distance = np.sqrt((u - cell_u) ** 2 + (v - cell_v) ** 2)
+        dot = np.clip(radius - distance + 0.5, 0.0, 1.0)
+        output[..., channel] -= dot
+    return (np.clip(output, 0, 1)[..., ::-1] * 255).astype(np.uint8)
+
+
+def _apply_glitch_filter(image_bgr, seed, intensity=1.0):
+    _require_bgr_uint8(image_bgr, "glitch_filter")
+    height, width = image_bgr.shape[:2]
+    rng = np.random.default_rng(seed)
+    result = image_bgr.copy()
+
+    # 가로 띠를 무작위로 밀어낸다
+    for _ in range(int(round(14 * intensity))):
+        band_h = int(rng.integers(2, max(3, height // 14)))
+        y = int(rng.integers(0, max(1, height - band_h)))
+        shift = int(rng.normal(0, width * 0.06 * intensity))
+        result[y:y + band_h] = np.roll(result[y:y + band_h], shift, axis=1)
+        if rng.random() < 0.25:
+            # 일부 띠는 채널 순서가 뒤섞인 색 깨짐
+            result[y:y + band_h] = result[y:y + band_h][..., rng.permutation(3)]
+
+    # RGB 채널 어긋남
+    offset = max(1, int(round(width * 0.008 * intensity)))
+    result[..., 2] = np.roll(result[..., 2], offset, axis=1)
+    result[..., 0] = np.roll(result[..., 0], -offset, axis=1)
+
+    # VHS 주사선
+    line_period = max(2, height // 360)
+    scanline = np.ones(height, dtype=np.float32)
+    scanline[::line_period * 2] = 0.78
+    result = np.clip(result.astype(np.float32) * scanline[:, None, None], 0, 255)
+    noise = rng.normal(0, 6 * intensity, result.shape[:2])[..., None]
+    return np.clip(result + noise, 0, 255).astype(np.uint8)
+
+
+def _apply_puzzle_filter(image_bgr, seed, grid_size=4):
+    _require_bgr_uint8(image_bgr, "puzzle_filter")
+    height, width = image_bgr.shape[:2]
+    grid = int(grid_size)
+    tile_w, tile_h = width // grid, height // grid
+    if tile_w < 4 or tile_h < 4:
+        raise ValueError("puzzle_filter requires a larger image.")
+    rng = np.random.default_rng(seed)
+
+    # 완성 상태에서 빈칸을 무작위로 밀어 섞어야 항상 풀 수 있는 퍼즐이 된다
+    board = list(range(grid * grid))
+    empty = grid * grid - 1
+    previous = None
+    for _ in range(grid * grid * 25):
+        row, col = divmod(empty, grid)
+        neighbors = [
+            r * grid + c
+            for r, c in ((row - 1, col), (row + 1, col), (row, col - 1), (row, col + 1))
+            if 0 <= r < grid and 0 <= c < grid and r * grid + c != previous
+        ]
+        target = neighbors[int(rng.integers(len(neighbors)))]
+        board[empty], board[target] = board[target], board[empty]
+        previous, empty = empty, target
+
+    fitted = cv2.resize(image_bgr, (tile_w * grid, tile_h * grid), interpolation=cv2.INTER_AREA)
+    tiles = [
+        fitted[r * tile_h:(r + 1) * tile_h, c * tile_w:(c + 1) * tile_w]
+        for r in range(grid) for c in range(grid)
+    ]
+    gap = max(1, min(tile_w, tile_h) // 40)
+    canvas = np.full_like(fitted, 30)
+    for slot, piece in enumerate(board):
+        if piece == grid * grid - 1:
+            continue  # 빈칸
+        row, col = divmod(slot, grid)
+        y, x = row * tile_h, col * tile_w
+        canvas[y + gap:y + tile_h - gap, x + gap:x + tile_w - gap] = (
+            tiles[piece][gap:tile_h - gap, gap:tile_w - gap]
+        )
+    return cv2.resize(canvas, (width, height), interpolation=cv2.INTER_LINEAR)
+
+
+def _apply_droste_filter(image_bgr, scale=0.62, frame_ratio=0.025):
+    _require_bgr_uint8(image_bgr, "droste_filter")
+    height, width = image_bgr.shape[:2]
+    frame = max(1, int(round(min(height, width) * frame_ratio)))
+
+    # 사진 안에 흰 액자로 둘러싼 자기 자신을 넣는 과정을 너무 작아질 때까지 반복
+    result = image_bgr.copy()
+    inner_w, inner_h = int(width * scale), int(height * scale)
+    depth = 0
+    while inner_w > 2 * frame + 4 and inner_h > 2 * frame + 4 and depth < 12:
+        depth += 1
+        inner_w, inner_h = int(inner_w * scale), int(inner_h * scale)
+    for _ in range(depth):
+        framed_w, framed_h = int(width * scale), int(height * scale)
+        thumbnail = cv2.resize(
+            result, (framed_w - 2 * frame, framed_h - 2 * frame), interpolation=cv2.INTER_AREA
+        )
+        framed = cv2.copyMakeBorder(
+            thumbnail, frame, frame, frame, frame, cv2.BORDER_CONSTANT, value=(250, 250, 250)
+        )
+        nested = image_bgr.copy()
+        y0, x0 = (height - framed_h) // 2, (width - framed_w) // 2
+        shadow = max(1, frame // 2)
+        nested[y0 + shadow:y0 + framed_h + shadow, x0 + shadow:x0 + framed_w + shadow] = (
+            nested[y0 + shadow:y0 + framed_h + shadow, x0 + shadow:x0 + framed_w + shadow] // 2
+        )
+        nested[y0:y0 + framed_h, x0:x0 + framed_w] = framed
+        result = nested
+    return result
+
+
+LOCAL_FUN_FILTERS = {
+    "big_head_filter",
+    "face_swap_filter",
+    "hangul_art_filter",
+    "gameboy_filter",
+    "popart_filter",
+    "halftone_filter",
+    "glitch_filter",
+    "puzzle_filter",
+    "droste_filter",
+}
+
+
+def _apply_local_fun_filter(style_key, image_bgr, cfg, session_id):
+    if style_key == "big_head_filter":
+        face_boxes = _detect_faces_or_raise(image_bgr, cfg, "왕머리를")
+        return _apply_big_head_filter(
+            image_bgr,
+            face_boxes,
+            magnification=_bounded_float(cfg, "head_magnification", 1.8, 1.0, 3.0),
+            radius_ratio=_bounded_float(cfg, "head_radius_ratio", 0.8, 0.3, 2.0),
+        )
+    if style_key == "face_swap_filter":
+        face_boxes = _detect_faces_or_raise(image_bgr, cfg, "얼굴 바꾸기를")
+        return _apply_face_swap_filter(
+            image_bgr,
+            face_boxes,
+            padding_ratio=_bounded_float(cfg, "face_padding_ratio", 0.1, 0.0, 0.5),
+        )
+    if style_key == "hangul_art_filter":
+        return _apply_hangul_art_filter(
+            image_bgr, rows=int(_bounded_float(cfg, "hangul_rows", 90, 20, 240))
+        )
+    if style_key == "gameboy_filter":
+        return _apply_gameboy_filter(
+            image_bgr, pixel_height=int(_bounded_float(cfg, "pixel_height", 144, 32, 720))
+        )
+    if style_key == "popart_filter":
+        return _apply_popart_filter(image_bgr)
+    if style_key == "halftone_filter":
+        spacing = cfg.get("dot_spacing")
+        if spacing is not None:
+            spacing = _bounded_float(cfg, "dot_spacing", 10.0, 3.0, 100.0)
+        return _apply_halftone_filter(image_bgr, dot_spacing=spacing)
+    if style_key == "glitch_filter":
+        return _apply_glitch_filter(
+            image_bgr,
+            _session_seed(session_id),
+            intensity=_bounded_float(cfg, "glitch_intensity", 1.0, 0.1, 3.0),
+        )
+    if style_key == "puzzle_filter":
+        return _apply_puzzle_filter(
+            image_bgr,
+            _session_seed(session_id),
+            grid_size=int(_bounded_float(cfg, "puzzle_grid", 4, 2, 8)),
+        )
+    if style_key == "droste_filter":
+        return _apply_droste_filter(
+            image_bgr, scale=_bounded_float(cfg, "droste_scale", 0.62, 0.3, 0.85)
+        )
+    raise ValueError(f"Unsupported style: {style_key}")
 
 
 def _encode_png_base64(image, filter_name):
@@ -1398,6 +1844,11 @@ def _run_transform_task(session_id, style_key, gender, adetailer_enabled, overri
                 edges = cv2.Canny(img_cv, threshold_low, threshold_high)
                 edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
                 result_b64 = _encode_png_base64(edges_bgr, style_key)
+
+            elif style_key in LOCAL_FUN_FILTERS:
+                img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+                filtered = _apply_local_fun_filter(style_key, img_cv, cfg, session_id)
+                result_b64 = _encode_png_base64(filtered, style_key)
 
             else: 
                 result_b64 = init_b64 # 원본 반환
