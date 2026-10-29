@@ -1,14 +1,17 @@
-from flask import Flask, request, jsonify, send_from_directory, render_template, session, abort
+from flask import Flask, request, jsonify, send_from_directory, render_template, session, abort, make_response, url_for
 from celery import Celery
 import os, uuid, hashlib, json, base64, time
 from datetime import datetime
 from functools import wraps
-from threading import Lock
+from threading import Lock, BoundedSemaphore
+from collections import OrderedDict
+from concurrent.futures import Future
+from io import BytesIO
 import qrcode
 import requests
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 import shutil
 import socket
 import cv2
@@ -87,6 +90,13 @@ _yolo_face_model_lock = Lock()
 _yolo_face_inference_lock = Lock()
 _yolo_face_models = {}
 _checkpoint_config_lock = Lock()
+_admin_thumbnail_lock = Lock()
+_admin_thumbnail_slots = BoundedSemaphore(2)
+_admin_thumbnail_cache = OrderedDict()
+_admin_thumbnail_pending = {}
+_admin_thumbnail_cache_bytes = 0
+ADMIN_THUMBNAIL_MAX_ENTRIES = 128
+ADMIN_THUMBNAIL_MAX_BYTES = 32 * 1024 * 1024
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -928,6 +938,18 @@ def admin_data():
             "result_url": f"/public/{folder}/result.png"
         })
 
+    for item in items:
+        item["raw_thumbnail_url"] = (
+            url_for("admin_thumbnail", item_id=item["id"], image_type="raw", v=item["raw_version"])
+            if item["raw_url"] else None
+        )
+        item["result_thumbnail_url"] = (
+            url_for("admin_thumbnail", item_id=item["id"],
+                    image_type="preview" if item["result_kind"] == "preview" else "result",
+                    v=item["result_version"])
+            if item["result_url"] else None
+        )
+
     coin_clients = _get_coin_balances_snapshot()
     device_numbers = {client["client_id"]: index + 1 for index, client in enumerate(coin_clients)}
     with _coin_balance_lock:
@@ -1741,6 +1763,108 @@ def serve_image(folder, filename):
     if filename != "result.png" and not is_admin_authenticated():
         abort(401)
     return send_from_directory(os.path.join(PUBLIC_DIR, folder), filename)
+
+
+def _resolve_admin_thumbnail_source(item_id, image_type):
+    if image_type not in {"raw", "preview", "result"}:
+        return None
+    if item_id.startswith("legacy-"):
+        folder = item_id[len("legacy-"):]
+        if (not folder or folder in {".", ".."} or folder != folder.rstrip(" .")
+                or any(char in folder for char in ("/", "\\", ":", "\x00"))
+                or image_type == "preview"):
+            return None
+        return os.path.join(PUBLIC_DIR, folder, f"{image_type}.png")
+    session_id = _normalize_temp_session_id(item_id)
+    if session_id is None:
+        return None
+    if image_type == "raw":
+        return os.path.join(TEMP_DIR, session_id, "raw.png")
+    if image_type == "preview":
+        return os.path.join(PREVIEW_DIR, f"{session_id}.png")
+    folder = hashlib.sha256(session_id.encode()).hexdigest()[:16]
+    return os.path.join(PUBLIC_DIR, folder, "result.png")
+
+
+def _encode_admin_thumbnail(path):
+    with Image.open(path) as source:
+        image = ImageOps.exif_transpose(source)
+        image.thumbnail((640, 640), Image.Resampling.LANCZOS)
+        if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
+            rgba = image.convert("RGBA")
+            background = Image.new("RGB", rgba.size, "white")
+            background.paste(rgba, mask=rgba.getchannel("A"))
+            image = background
+        else:
+            image = image.convert("RGB")
+        output = BytesIO()
+        image.save(output, format="JPEG", quality=80)
+        data = output.getvalue()
+    return data, hashlib.sha256(data).hexdigest()
+
+
+def _get_admin_thumbnail(path, image_type, version):
+    global _admin_thumbnail_cache_bytes
+    key = (path, image_type, version)
+    with _admin_thumbnail_lock:
+        if key in _admin_thumbnail_cache:
+            _admin_thumbnail_cache.move_to_end(key)
+            return _admin_thumbnail_cache[key]
+        pending = _admin_thumbnail_pending.get(key)
+        owner = pending is None
+        if owner:
+            pending = Future()
+            _admin_thumbnail_pending[key] = pending
+    if not owner:
+        return pending.result()
+    try:
+        with _admin_thumbnail_slots:
+            result = _encode_admin_thumbnail(path)
+        with _admin_thumbnail_lock:
+            if len(result[0]) <= ADMIN_THUMBNAIL_MAX_BYTES:
+                _admin_thumbnail_cache[key] = result
+                _admin_thumbnail_cache_bytes += len(result[0])
+                while (_admin_thumbnail_cache and
+                       (len(_admin_thumbnail_cache) > ADMIN_THUMBNAIL_MAX_ENTRIES
+                        or _admin_thumbnail_cache_bytes > ADMIN_THUMBNAIL_MAX_BYTES)):
+                    _, evicted = _admin_thumbnail_cache.popitem(last=False)
+                    _admin_thumbnail_cache_bytes -= len(evicted[0])
+            pending.set_result(result)
+        return result
+    except Exception as error:
+        pending.set_exception(error)
+        raise
+    finally:
+        with _admin_thumbnail_lock:
+            _admin_thumbnail_pending.pop(key, None)
+
+
+@app.route("/admin_thumbnail/<item_id>/<image_type>")
+@admin_required
+def admin_thumbnail(item_id, image_type):
+    path = _resolve_admin_thumbnail_source(item_id, image_type)
+    if path is None or not os.path.isfile(path):
+        abort(404)
+    try:
+        version = (_get_raw_image_version(path) if image_type == "raw"
+                   else str(os.stat(path).st_mtime_ns))
+        if version is None:
+            abort(404)
+        data, etag = _get_admin_thumbnail(path, image_type, version)
+        if not os.path.isfile(path):
+            abort(404)
+    except FileNotFoundError:
+        abort(404)
+    except (OSError, UnidentifiedImageError, ValueError, Image.DecompressionBombError):
+        logger.warning("Failed to create admin thumbnail: %s", path, exc_info=True)
+        response = make_response("미리보기를 준비하지 못했습니다.", 503)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    response = make_response(data)
+    response.mimetype = "image/jpeg"
+    response.headers["Cache-Control"] = "private, no-cache"
+    response.set_etag(etag)
+    return response.make_conditional(request)
 
 
 @app.route("/admin_session_image/<session_id>/<image_type>")

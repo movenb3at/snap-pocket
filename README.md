@@ -379,7 +379,7 @@ Only add origins that you control and trust. This Chrome flag is a per-device de
 
 Stable Diffusion styles expose four guest-facing levels: Low, Default, High, and Ultra. The guest UI shows only the level names. Each new photo starts at Default; the initial strengths are 0.3, 0.45, 0.6, and 0.75 respectively. Original return and local filters do not expose this control.
 
-Administrators can change Default, High, and Ultra independently for each SD style. Valid input is saved automatically after 600 ms of inactivity and must satisfy `0.3 < default < high < ultra <= 1`. Low remains fixed at 0.3. Failed saves keep the draft visible and offer a retry.
+Administrators can change Default, High, and Ultra independently for each SD style. Valid input is saved automatically after 1500 ms of inactivity and must satisfy `0.3 < default < high < ultra <= 1`. Low remains fixed at 0.3. Failed saves keep the draft visible and offer a retry.
 
 Settings are persisted in `checkpoints.<style>.denoising_presets` in the local configuration. Styles without this object use the initial strengths above. The legacy style-level `denoising_strength` field is no longer needed. Older task calls without an explicit strength use the style's Default preset. The presets do not change ADetailer's separate face-correction strength.
 

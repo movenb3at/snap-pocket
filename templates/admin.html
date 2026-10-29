@@ -613,6 +613,18 @@
             object-fit: cover;
         }
 
+        .thumbnail-error {
+            display: grid;
+            aspect-ratio: 4 / 3;
+            place-items: center;
+            padding: 18px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .thumbnail-error[hidden] { display: none; }
+        .img-box img[hidden] { display: none; }
+
         .image-placeholder {
             display: grid;
             aspect-ratio: 4 / 3;
@@ -1440,6 +1452,9 @@
         let adminRefreshTimer = null;
         let liveUpdateHealthTimer = null;
         let adminDataRequestInFlight = false;
+        let adminDataRequestController = null;
+        let adminDataGeneration = 0;
+        let adminSessionState = 'unknown';
         const ADMIN_REFRESH_TIMEOUT_MS = 10000;
         const LIVE_UPDATE_STALE_AFTER_MS = 10000;
         let lastSuccessfulAdminRefreshAt = 0;
@@ -1458,6 +1473,7 @@
         }
 
         function checkLiveUpdateHealth() {
+            if (document.hidden || adminSessionState !== 'authenticated') return;
             if (
                 lastSuccessfulAdminRefreshAt > 0
                 && Date.now() - lastSuccessfulAdminRefreshAt > LIVE_UPDATE_STALE_AFTER_MS
@@ -1713,7 +1729,7 @@
             state.timer = setTimeout(() => {
                 state.timer = null;
                 void saveDenoisingRow(state);
-            }, 600);
+            }, 1500);
         }
 
         async function saveDenoisingRow(state) {
@@ -1764,9 +1780,9 @@
                     row.dataset.style = style;
                     row.innerHTML = `<div class="denoising-config-heading"><h3></h3><span class="denoising-save-status" role="status" aria-live="polite">저장됨</span></div>
                         <div class="denoising-config-inputs">
-                            <label>기본<input type="number" step="any" min="0.3" max="1" data-level="default" required></label>
-                            <label>높음<input type="number" step="any" min="0.3" max="1" data-level="high" required></label>
-                            <label>울트라<input type="number" step="any" min="0.3" max="1" data-level="ultra" required></label>
+                            <label>기본<input type="number" step="0.01" min="0.3" max="1" data-level="default" required></label>
+                            <label>높음<input type="number" step="0.01" min="0.3" max="1" data-level="high" required></label>
+                            <label>울트라<input type="number" step="0.01" min="0.3" max="1" data-level="ultra" required></label>
                         </div><p class="denoising-row-error" role="status"></p>
                         <button type="button" class="denoising-retry" hidden>다시 저장</button>`;
                     row.querySelector('h3').textContent = denoisingStyleLabels[style] || style;
@@ -1816,20 +1832,39 @@
             updateDOM(Array.isArray(data?.items) ? data.items : []);
         }
 
+        function stopAdminRefresh() {
+            if (adminRefreshTimer) clearInterval(adminRefreshTimer);
+            if (liveUpdateHealthTimer) clearInterval(liveUpdateHealthTimer);
+            adminRefreshTimer = null;
+            liveUpdateHealthTimer = null;
+        }
+
+        function cancelAdminDataRequest() {
+            adminDataGeneration += 1;
+            adminDataRequestController?.abort();
+            adminDataRequestController = null;
+            adminDataRequestInFlight = false;
+        }
+
+        function startAdminRefresh() {
+            if (document.hidden || adminSessionState !== 'authenticated') return;
+            if (!adminRefreshTimer) adminRefreshTimer = setInterval(loadData, 3000);
+            if (!liveUpdateHealthTimer) liveUpdateHealthTimer = setInterval(checkLiveUpdateHealth, 1000);
+        }
+
         function showAdmin(initialData = null) {
+            adminSessionState = 'authenticated';
             document.getElementById('login-overlay').style.display = 'none';
             document.getElementById('app-content').style.display = 'block';
             if (initialData) {
                 renderAdminData(initialData);
                 setLiveUpdateStatus(true);
             } else {
+                cancelAdminDataRequest();
                 setLiveUpdateStatus(false);
-                loadData();
+                void loadData();
             }
-            if (!adminRefreshTimer) adminRefreshTimer = setInterval(loadData, 3000);
-            if (!liveUpdateHealthTimer) {
-                liveUpdateHealthTimer = setInterval(checkLiveUpdateHealth, 1000);
-            }
+            startAdminRefresh();
         }
 
         async function attemptLogin() {
@@ -2161,6 +2196,7 @@
         function createImageHTML(item, type) {
             const isRaw = type === 'raw';
             const url = isRaw ? item.raw_url : item.result_url;
+            const thumbnailUrl = isRaw ? item.raw_thumbnail_url : item.result_thumbnail_url;
             const label = isRaw
                 ? 'RAW'
                 : item.result_kind === 'preview'
@@ -2186,7 +2222,8 @@
             return `
                 <button class="img-box image-open-button" type="button" data-image-type="${type}" data-image-src="${escapeHTML(imageSrc)}" data-image-label="${escapeHTML(label)}">
                     <div class="img-title">${escapeHTML(label)}</div>
-                    <img src="${escapeHTML(imageSrc)}" alt="${escapeHTML(label)}">
+                    <img ${thumbnailUrl ? `src="${escapeHTML(thumbnailUrl)}"` : 'hidden'} alt="${escapeHTML(label)}" loading="lazy" decoding="async" width="640" height="480">
+                    <span class="thumbnail-error" ${thumbnailUrl ? 'hidden' : ''}>미리보기를 불러오지 못했습니다. 클릭하면 전체 이미지를 확인할 수 있습니다.</span>
                 </button>
             `;
         }
@@ -2222,9 +2259,11 @@
                 item.status,
                 item.raw_url,
                 item.raw_version,
+                item.raw_thumbnail_url,
                 item.result_url,
                 item.result_kind,
                 item.result_version,
+                item.result_thumbnail_url,
                 item.finalized,
                 item.timestamp,
                 item.metadata,
@@ -2240,6 +2279,40 @@
             if (animate) element.style.animationDelay = `${index * 0.08}s`;
             return element;
         }
+
+        function retryFailedThumbnails() {
+            document.querySelectorAll('.image-open-button img[data-thumbnail-failed]').forEach(image => {
+                if (image.dataset.thumbnailRetrying) return;
+                const rect = image.parentElement.getBoundingClientRect();
+                if (rect.bottom < -300 || rect.top > window.innerHeight + 300) return;
+                image.dataset.thumbnailRetrying = 'true';
+                const url = image.getAttribute('src');
+                if (url) {
+                    image.hidden = false;
+                    image.nextElementSibling.hidden = true;
+                    image.removeAttribute('src');
+                    image.src = url;
+                }
+            });
+        }
+
+        document.getElementById('content').addEventListener('error', event => {
+            const image = event.target;
+            if (!(image instanceof HTMLImageElement) || !image.closest('.image-open-button')) return;
+            image.dataset.thumbnailFailed = 'true';
+            delete image.dataset.thumbnailRetrying;
+            image.hidden = true;
+            image.nextElementSibling.hidden = false;
+        }, true);
+
+        document.getElementById('content').addEventListener('load', event => {
+            const image = event.target;
+            if (!(image instanceof HTMLImageElement) || !image.closest('.image-open-button')) return;
+            delete image.dataset.thumbnailFailed;
+            delete image.dataset.thumbnailRetrying;
+            image.hidden = false;
+            image.nextElementSibling.hidden = true;
+        }, true);
 
         function updateDOM(newItems) {
             const container = document.getElementById("content");
@@ -2329,11 +2402,15 @@
         `;
         document.head.appendChild(style);
 
-        async function loadData() {
-            if (adminDataRequestInFlight) return;
+        async function loadData({ restoreSession = false } = {}) {
+            if (document.hidden || adminDataRequestInFlight
+                || (!restoreSession && adminSessionState !== 'authenticated')) return;
             adminDataRequestInFlight = true;
             const requestedAt = performance.now();
             const requestController = new AbortController();
+            adminDataRequestController = requestController;
+            const generation = ++adminDataGeneration;
+            const isCurrent = () => !document.hidden && generation === adminDataGeneration;
             const requestTimeout = setTimeout(
                 () => requestController.abort(),
                 ADMIN_REFRESH_TIMEOUT_MS
@@ -2344,40 +2421,63 @@
                     signal: requestController.signal,
                     cache: 'no-store'
                 });
+                if (!isCurrent()) return;
                 if (res.status === 401) {
+                    adminSessionState = 'anonymous';
                     setLiveUpdateStatus(false);
-                    if (adminRefreshTimer) clearInterval(adminRefreshTimer);
-                    adminRefreshTimer = null;
-                    if (liveUpdateHealthTimer) clearInterval(liveUpdateHealthTimer);
-                    liveUpdateHealthTimer = null;
+                    stopAdminRefresh();
                     document.getElementById('app-content').style.display = 'none';
                     document.getElementById('login-overlay').style.display = 'flex';
                     return;
                 }
                 if (!res.ok) throw new Error(`관리자 데이터 요청 실패: ${res.status}`);
 
-                renderAdminData(await res.json(), requestedAt);
-                setLiveUpdateStatus(true);
+                const data = await res.json();
+                if (!isCurrent()) return;
+                if (restoreSession) showAdmin(data);
+                else {
+                    renderAdminData(data, requestedAt);
+                    retryFailedThumbnails();
+                    setLiveUpdateStatus(true);
+                }
             } catch (e) {
+                if (!isCurrent()) return;
                 setLiveUpdateStatus(false);
                 console.error("데이터를 불러오는데 실패했습니다.", e);
             } finally {
                 clearTimeout(requestTimeout);
-                adminDataRequestInFlight = false;
+                if (generation === adminDataGeneration) {
+                    adminDataRequestController = null;
+                    adminDataRequestInFlight = false;
+                }
             }
         }
 
-        async function restoreAdminSession() {
-            try {
-                const res = await fetch('/admin_data', { cache: 'no-store' });
-                if (!res.ok) return;
-                showAdmin(await res.json());
-            } catch (error) {
-                console.error('관리자 세션 확인에 실패했습니다.', error);
+        function resumeAdminRefresh() {
+            if (document.hidden) return;
+            if (adminSessionState === 'unknown') {
+                void loadData({ restoreSession: true });
+            } else if (adminSessionState === 'authenticated') {
+                lastSuccessfulAdminRefreshAt = Date.now();
+                void loadData();
+                startAdminRefresh();
             }
         }
 
-        restoreAdminSession();
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopAdminRefresh();
+                cancelAdminDataRequest();
+            } else resumeAdminRefresh();
+        });
+        window.addEventListener('pagehide', () => {
+            stopAdminRefresh();
+            cancelAdminDataRequest();
+        });
+        window.addEventListener('pageshow', event => {
+            if (event.persisted) resumeAdminRefresh();
+        });
+        resumeAdminRefresh();
     </script>
 </body>
 </html>
