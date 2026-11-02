@@ -1439,6 +1439,19 @@
                                 <option value="color_inversion_filter">[필터] 색 반전</option>
                                 <option value="mosaic_filter">[필터] 얼굴 모자이크</option>
                                 <option value="canny_filter">[필터] 윤곽선</option>
+                                {% for filter_key, filter_label in [
+                                    ('big_head_filter', '왕머리'),
+                                    ('face_swap_filter', '얼굴 바꾸기'),
+                                    ('hangul_art_filter', '한글 아트'),
+                                    ('gameboy_filter', '8비트 게임'),
+                                    ('popart_filter', '팝아트 4분할'),
+                                    ('halftone_filter', '만화 망점'),
+                                    ('glitch_filter', '글리치'),
+                                    ('puzzle_filter', '슬라이드 퍼즐'),
+                                    ('droste_filter', '무한 액자')
+                                ] %}
+                                <option value="{{ filter_key }}"{% if local_filter_errors.get(filter_key) %} disabled title="{{ local_filter_errors[filter_key] }}"{% endif %}>[필터] {{ filter_label }}{% if local_filter_errors.get(filter_key) %} (준비 필요){% endif %}</option>
+                                {% endfor %}
                                 <option value="anime" data-stable-diffusion="{{ 'true' if 'anime' in stable_diffusion_styles|default(['anime', 'watercolor', 'comic']) else 'false' }}" data-adetailer-supported="true">[스타일] 애니메이션</option>
                                 <option value="watercolor" data-stable-diffusion="{{ 'true' if 'watercolor' in stable_diffusion_styles|default(['anime', 'watercolor', 'comic']) else 'false' }}" data-adetailer-supported="true">[스타일] 수채화</option>
                                 <option value="comic" data-stable-diffusion="{{ 'true' if 'comic' in stable_diffusion_styles|default(['anime', 'watercolor', 'comic']) else 'false' }}" data-adetailer-supported="true">[스타일] 코믹북</option>
@@ -2544,7 +2557,7 @@ async function waitForTransform(taskId, onStateChange) {
         }
         if (statusData.state === "SUCCESS") return;
         if (statusData.state === "FAILURE" || statusData.state === "REVOKED") {
-            throw new Error(statusData.status || "AI 변환에 실패했습니다.");
+            throw new Error(statusData.status || "이미지 변환에 실패했습니다.");
         }
         if (statusData.state === "STARTED") {
             if (transformStartedAt === null) transformStartedAt = Date.now();
@@ -2623,9 +2636,9 @@ async function startTransform() {
 
         await waitForTransform(taskId, state => {
             if (state === "STARTED") {
-                setTransformButtonStatus(btn, "AI 변환 중...");
+                setTransformButtonStatus(btn, "이미지 변환 중...");
             } else if (state === "RETRY") {
-                setTransformButtonStatus(btn, "AI 변환 재시도 중...");
+                setTransformButtonStatus(btn, "이미지 변환 재시도 중...");
             } else if (state === "PENDING") {
                 setTransformButtonStatus(btn, "변환 대기 중...");
             }
