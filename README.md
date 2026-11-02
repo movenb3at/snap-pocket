@@ -31,6 +31,7 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 | Browser-based camera UI | Waits for camera metadata, preserves the camera's full aspect ratio without cropping or stretching, and limits high-resolution captures to 2,073,600 pixels without upscaling lower-resolution cameras |
 | AI image transformation | Applies configured styles through Stable Diffusion WebUI and `img2img` |
 | YOLO face mosaic | Detects every face locally with Ultralytics YOLO and pixelates padded face boxes without calling Stable Diffusion |
+| Fun local filters | Big head, face swap, Hangul text art, 8-bit Game Boy, pop-art grid, comic halftone, glitch, slide puzzle, and infinite frame effects processed entirely on the host PC with OpenCV |
 | Photo framing | Adds an optional date-stamped SnapPocket frame with ten color presets and supports framed original/result comparisons or result-only output |
 | Per-device coin control | Accepts prepayment from the camera or download page, consumes one coin only when a capture continues to style selection, and keeps retakes free |
 | QR delivery | Serves the finished PNG as an attachment from a scanned QR code |
@@ -82,7 +83,7 @@ SnapPocket is a web-based AI photobooth system that automates the entire experie
 - Python and Git
 - Stable Diffusion WebUI by AUTOMATIC1111
 - Memurai installed and registered as a Windows service
-- A compatible `face_yolov8*.pt` model when using `mosaic_filter`
+- A compatible `face_yolov8*.pt` model when using `mosaic_filter`, `big_head_filter`, or `face_swap_filter`
 
 GPU performance directly affects image-generation time.
 
@@ -237,6 +238,17 @@ Local filter behavior can be tuned directly in `checkpoints.json`. When a key is
 | Mosaic | `mosaic_scale` | `0.08` | `0.01` to `1.0`; smaller values create larger mosaic blocks |
 | Canny | `canny_threshold_low` | `50` | `0.0` to `255.0`; must be lower than the high threshold |
 | Canny | `canny_threshold_high` | `150` | `0.0` to `255.0`; must be higher than the low threshold |
+| Big head | `head_magnification` | `1.8` | `1.0` to `3.0`; magnification at the center of each face |
+| Big head | `head_radius_ratio` | `0.8` | `0.3` to `2.0`; bulge radius relative to the face box size |
+| Face swap | `face_padding_ratio` | `0.1` | `0.0` to `0.5` |
+| Hangul art | `hangul_rows` | `90` | `20` to `240` character rows |
+| 8-bit game | `pixel_height` | `144` | `32` to `720`; 144 matches the original Game Boy screen |
+| Halftone | `dot_spacing` | `null` | `3.0` to `100.0` pixels; `null` scales with the photo size |
+| Glitch | `glitch_intensity` | `1.0` | `0.1` to `3.0` |
+| Slide puzzle | `puzzle_grid` | `4` | `2` to `8` tiles per side |
+| Infinite frame | `droste_scale` | `0.62` | `0.3` to `0.85`; size of each nested frame |
+
+Big head and face swap also accept the mosaic YOLO keys (`yolo_confidence`, `yolo_iou`, `yolo_imgsz`, `yolo_device`).
 
 ### 9. Start the services
 
@@ -375,6 +387,15 @@ Only add origins that you control and trust. This Chrome flag is a per-device de
 - The default `yolo_device: "auto"` uses a CUDA-capable GPU when PyTorch can access one, otherwise CPU. Automatic mode retries once on CPU if GPU inference fails. A CUDA-enabled PyTorch build and compatible driver are required for GPU execution; `"cpu"` can still be set explicitly to force CPU processing.
 - Missing `checkpoints.json`, missing `face_yolov8*.pt` weights, zero detected faces, or PNG encoding failure produces an explicit error. SnapPocket does not return an unprotected original image as a successful mosaic result.
 
+### Fun Filter Behavior
+
+- Every fun filter runs on the host PC with OpenCV, NumPy, Pillow, and the bundled pixel font. None of them calls Stable Diffusion or any external service, and Ultralytics analytics sync is disabled before the local YOLO model loads.
+- **왕머리 (big head)** enlarges each detected face with a smooth bulge that blends back into the photo without a seam.
+- **얼굴 바꾸기 (face swap)** passes faces one place to the right in left-to-right order and matches each face to the lighting of its new position. A single person gets an upside-down face.
+- Big head and face swap use the same local YOLO model as the mosaic filter and report an explicit error when no face is detected.
+- **한글 아트** redraws the photo with Hangul characters chosen by ink density, colored from the original image on a black background.
+- **글리치** and **슬라이드 퍼즐** derive their randomness from the session ID, so the same capture always produces the same result. The puzzle is shuffled by legal slides, so it is always solvable.
+
 ### Denoising Strength
 
 Stable Diffusion styles expose four guest-facing levels: Low, Default, High, and Ultra. The guest UI shows only the level names. Each new photo starts at Default; the initial strengths are 0.3, 0.45, 0.6, and 0.75 respectively. Original return and local filters do not expose this control.
@@ -458,6 +479,7 @@ Administrator authentication is verified by Flask. The admin list and original `
 - [2026-09-01] Added local YOLO face mosaic filtering, Git-ignored `models/mosaic` weights, and a public `checkpoints.example.json` with private local configuration kept in `checkpoints.json`.
 - [2026-09-04] Added convex and concave mirror filters, corrected edge-coordinate mapping, and documented the strict mirror-filter key migration.
 - [2026-09-07] Added a local OpenCV color inversion filter.
+- [2026-10-27] Added nine local fun filters: big head, face swap, Hangul art, 8-bit game, pop-art grid, comic halftone, glitch, slide puzzle, and infinite frame.
 
 ---
 

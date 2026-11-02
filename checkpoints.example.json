@@ -123,6 +123,50 @@
             "model_name": null,
             "canny_threshold_low": 50,
             "canny_threshold_high": 150
+        },
+        "big_head_filter": {
+            "model_name": null,
+            "head_magnification": 1.8,
+            "head_radius_ratio": 0.8,
+            "yolo_confidence": 0.3,
+            "yolo_iou": 0.5,
+            "yolo_imgsz": 640,
+            "yolo_device": "auto"
+        },
+        "face_swap_filter": {
+            "model_name": null,
+            "face_padding_ratio": 0.1,
+            "yolo_confidence": 0.3,
+            "yolo_iou": 0.5,
+            "yolo_imgsz": 640,
+            "yolo_device": "auto"
+        },
+        "hangul_art_filter": {
+            "model_name": null,
+            "hangul_rows": 90
+        },
+        "gameboy_filter": {
+            "model_name": null,
+            "pixel_height": 144
+        },
+        "popart_filter": {
+            "model_name": null
+        },
+        "halftone_filter": {
+            "model_name": null,
+            "dot_spacing": null
+        },
+        "glitch_filter": {
+            "model_name": null,
+            "glitch_intensity": 1.0
+        },
+        "puzzle_filter": {
+            "model_name": null,
+            "puzzle_grid": 4
+        },
+        "droste_filter": {
+            "model_name": null,
+            "droste_scale": 0.62
         }
     }
 }
